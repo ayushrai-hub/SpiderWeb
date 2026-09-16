@@ -1,0 +1,18 @@
+{
+  "name": "@intel/ingestion",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@intel/types": "workspace:*",
+    "@intel/shared": "workspace:*",
+    "csv-parse": "^5.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

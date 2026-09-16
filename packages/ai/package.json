@@ -1,0 +1,21 @@
+{
+  "name": "@intel/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@intel/shared": "workspace:*",
+    "@anthropic-ai/sdk": "^0.24.0",
+    "openai": "^4.50.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "typescript": "^5.5.0"
+  }
+}

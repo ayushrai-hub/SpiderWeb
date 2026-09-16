@@ -1,0 +1,48 @@
+{
+  "name": "professional-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal Relationship & Professional Intelligence Platform",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "dev": "pnpm --filter @intel/api dev & pnpm --filter @intel/web dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @intel/database migrate",
+    "db:generate": "pnpm --filter @intel/database generate",
+    "db:seed": "pnpm --filter @intel/database seed",
+    "prepare": "husky",
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-import": "^2.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.9.7",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^2.1.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}
