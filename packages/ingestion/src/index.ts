@@ -7,7 +7,14 @@ export { getLinkedInAdapters, matchAdapter, identifyFileType } from './linkedin/
 export type { LinkedInAdapter } from './linkedin/adapters.js';
 
 // Archive Handler
-export { extractArchive, cleanupExtractedFiles } from './archive-handler.js';
+export {
+  extractArchive,
+  parseExtractedFiles,
+  cleanupExtractedFiles,
+  classifyFile,
+  ArchiveError,
+  EXTRACTION_LIMITS,
+} from './archive-handler.js';
 export type { ArchiveInventory, ArchiveFile, IngestionManifest } from './archive-handler.js';
 
 // Normalizer
@@ -19,6 +26,7 @@ export type {
   NormalizedMessage,
   NormalizedActivity,
   NormalizedJob,
+  NormalizedEmployment,
   NormalizedEducation,
   NormalizedSkill,
   NormalizedInsight,

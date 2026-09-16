@@ -1,4 +1,5 @@
 import type { CsvParseResult } from './csv-parser.js';
+import { parseLinkedInDate as sharedParseLinkedInDate } from '@intel/shared';
 
 // Canonical types matching database schema
 export interface NormalizedPerson {
@@ -35,6 +36,7 @@ export interface NormalizedCompany {
 export interface NormalizedConnection {
   workspaceId: string;
   personId?: string;
+  personName: string; // lookup key to person (dedup-safe)
   connectedAt?: Date;
   sourceFile: string;
   status: 'connected' | 'invited' | 'pending';
@@ -45,6 +47,8 @@ export interface NormalizedMessage {
   conversationId?: string;
   senderId?: string;
   recipientId?: string;
+  senderName?: string;
+  recipientName?: string;
   content: string;
   direction: 'inbound' | 'outbound';
   sentAt?: Date;
@@ -101,6 +105,18 @@ export interface NormalizedInsight {
   generatedAt: Date;
 }
 
+export interface NormalizedEmployment {
+  workspaceId: string;
+  personId?: string;
+  companyName?: string;
+  title?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent: boolean;
+  sourceFile: string;
+}
+
 export interface NormalizationResult {
   persons: NormalizedPerson[];
   companies: NormalizedCompany[];
@@ -108,6 +124,7 @@ export interface NormalizationResult {
   messages: NormalizedMessage[];
   activities: NormalizedActivity[];
   jobs: NormalizedJob[];
+  employment: NormalizedEmployment[];
   education: NormalizedEducation[];
   skills: NormalizedSkill[];
   insights: NormalizedInsight[];
@@ -116,29 +133,9 @@ export interface NormalizationResult {
 }
 
 function parseLinkedInDate(dateStr: string | undefined): Date | undefined {
-  if (!dateStr) return undefined;
-  
-  // LinkedIn uses various date formats
-  const formats = [
-    /^(?<month>\d{1,2})\/(?<day>\d{1,2})\/(?<year>\d{4})$/,
-    /^(?<year>\d{4})-(?<month>\d{1,2})-(?<day>\d{1,2})$/,
-    /^(?<month>\w+)\s+(?<day>\d{1,2}),?\s+(?<year>\d{4})$/,
-  ];
-  
-  for (const format of formats) {
-    const match = dateStr.match(format);
-    if (match?.groups) {
-      const { year, month, day } = match.groups;
-      const monthNum = isNaN(parseInt(month)) 
-        ? new Date(`${month} 1, 2000`).getMonth() + 1
-        : parseInt(month);
-      return new Date(parseInt(year), monthNum - 1, parseInt(day));
-    }
-  }
-  
-  // Try native parsing as fallback
-  const parsed = new Date(dateStr);
-  return isNaN(parsed.getTime()) ? undefined : parsed;
+  if (!dateStr || dateStr.trim() === '') return undefined;
+  const parsed = sharedParseLinkedInDate(dateStr);
+  return parsed ?? undefined;
 }
 
 function normalizeConnections(
@@ -149,6 +146,10 @@ function normalizeConnections(
   const persons: NormalizedPerson[] = [];
   const connections: NormalizedConnection[] = [];
 
+  // Deterministic dedup key: profile URL > email > name+company.
+  // NEVER merge on name alone.
+  const seen = new Map<string, number>(); // key -> index in persons[]
+
   for (const record of records) {
     const firstName = record['First Name'] || record['firstName'] || '';
     const lastName = record['Last Name'] || record['lastName'] || '';
@@ -156,26 +157,42 @@ function normalizeConnections(
     
     if (!fullName) continue;
 
-    const person: NormalizedPerson = {
-      workspaceId,
-      fullName,
-      firstName: firstName || undefined,
-      lastName: lastName || undefined,
-      email: record['Email Address'] || record['email'] || undefined,
-      company: record['Company'] || record['company'] || undefined,
-      title: record['Position'] || record['title'] || undefined,
-      location: record['Location'] || record['location'] || undefined,
-      profileUrl: record['Profile URL'] || record['url'] || undefined,
-      linkedinId: record['ID'] || record['id'] || undefined,
-      sourceType: 'linkedin',
-      sourceFile,
-      confidence: 95,
-      observedAt: new Date(),
-    };
-    persons.push(person);
+    const profileUrl = record['Profile URL'] || record['url'] || undefined;
+    const email = record['Email Address'] || record['email'] || undefined;
+    const company = record['Company'] || record['company'] || undefined;
+
+    const dedupKey = profileUrl
+      ? `url:${profileUrl.toLowerCase().replace(/\?.*$/, '')}`
+      : email
+        ? `email:${email.toLowerCase()}`
+        : `nc:${fullName.toLowerCase()}|${(company || '').toLowerCase()}`;
+
+    let personIndex = seen.get(dedupKey);
+    if (personIndex === undefined) {
+      const person: NormalizedPerson = {
+        workspaceId,
+        fullName,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        email,
+        company,
+        title: record['Position'] || record['title'] || undefined,
+        location: record['Location'] || record['location'] || undefined,
+        profileUrl,
+        linkedinId: record['ID'] || record['id'] || undefined,
+        sourceType: 'linkedin',
+        sourceFile,
+        confidence: 95,
+        observedAt: new Date(),
+      };
+      personIndex = persons.length;
+      persons.push(person);
+      seen.set(dedupKey, personIndex);
+    }
 
     const connection: NormalizedConnection = {
       workspaceId,
+      personName: fullName,
       connectedAt: parseLinkedInDate(record['Connected On'] || record['connectedOn']),
       sourceFile,
       status: 'connected',
@@ -193,15 +210,35 @@ function normalizeMessages(
 ): NormalizedMessage[] {
   const messages: NormalizedMessage[] = [];
 
+  // LinkedIn messages.csv real columns (2023+):
+  // "FROM","TO","DATE","CONTENT" (small export) or
+  // "Message ID","Conversation ID","Created At","Sender Name",
+  // "Sender Profile URL","To","From","Content" (full export)
   for (const record of records) {
-    const content = record['Message Content'] || record['content'] || '';
-    if (!content) continue;
+    const content =
+      record['CONTENT'] || record['Content'] || record['Message Content'] || record['content'] || '';
+    if (!content.trim()) continue;
+
+    const from = record['FROM'] || record['From'] || record['Sender Name'] || '';
+    const to = record['TO'] || record['To'] || '';
+    const isOutbound = /outbound|^INBOX$/i.test(record['Direction'] || '')
+      ? true
+      : false;
+    const direction: 'inbound' | 'outbound' = record['Direction']
+      ? isOutbound
+        ? 'outbound'
+        : 'inbound'
+      : from
+        ? 'inbound' // LinkedIn messages.csv: FROM = the other party
+        : 'inbound';
 
     const message: NormalizedMessage = {
       workspaceId,
       content,
-      direction: record['Direction'] === 'Outbound' ? 'outbound' : 'inbound',
-      sentAt: parseLinkedInDate(record['Sent Date'] || record['sentDate']),
+      direction,
+      senderName: from || undefined,
+      recipientName: to || undefined,
+      sentAt: parseLinkedInDate(record['DATE'] || record['DATE']?.trim() || record['Sent Date'] || record['sentDate'] || record['Created At']),
       sourceFile,
     };
     messages.push(message);
@@ -302,6 +339,50 @@ function normalizeSkills(
   return skills;
 }
 
+// Positions.csv: "Company","Title","Description","Started On","Finished On"
+function normalizePositions(
+  records: Record<string, string>[],
+  workspaceId: string,
+  sourceFile: string
+): { employment: NormalizedEmployment[]; companies: NormalizedCompany[] } {
+  const employment: NormalizedEmployment[] = [];
+  const companies: NormalizedCompany[] = [];
+  const seenCompanies = new Set<string>();
+
+  for (const record of records) {
+    const companyName = record['Company'] || record['company'] || '';
+    const title = record['Title'] || record['title'] || '';
+    if (!companyName && !title) continue;
+
+    const startDate = record['Started On'] || record['startDate'];
+    const endDate = record['Finished On'] || record['endDate'];
+
+    employment.push({
+      workspaceId,
+      companyName: companyName || undefined,
+      title: title || undefined,
+      description: record['Description'] || record['description'] || undefined,
+      startDate,
+      endDate,
+      isCurrent: !endDate,
+      sourceFile,
+    });
+
+    if (companyName && !seenCompanies.has(companyName.toLowerCase())) {
+      seenCompanies.add(companyName.toLowerCase());
+      companies.push({
+        workspaceId,
+        canonicalName: companyName,
+        sourceType: 'linkedin',
+        confidence: 85,
+        observedAt: new Date(),
+      });
+    }
+  }
+
+  return { employment, companies };
+}
+
 function normalizeJobs(
   records: Record<string, string>[],
   workspaceId: string,
@@ -364,6 +445,7 @@ export function normalizeData(
     messages: [],
     activities: [],
     jobs: [],
+    employment: [],
     education: [],
     skills: [],
     insights: [],
@@ -399,6 +481,14 @@ export function normalizeData(
             parseResult.records, workspaceId, filename
           );
           result.persons.push(...persons);
+          result.companies.push(...companies);
+          break;
+        }
+        case 'Positions': {
+          const { employment, companies } = normalizePositions(
+            parseResult.records, workspaceId, filename
+          );
+          result.employment.push(...employment);
           result.companies.push(...companies);
           break;
         }

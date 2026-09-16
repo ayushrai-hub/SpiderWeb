@@ -17,6 +17,20 @@ export function getDb() {
   return db;
 }
 
+/**
+ * Parameterized raw SQL query. Values are passed separately — never
+ * string-interpolated — so user input can't reach the SQL parser.
+ * Returns rows as plain objects (postgres.js RowList is array-like).
+ */
+export async function query(
+  text: string,
+  params: readonly unknown[] = []
+): Promise<any[]> {
+  if (!sql) getDb();
+  const rows = await sql!.unsafe(text, params as postgres.ParameterOrJSON<never>[]);
+  return rows as unknown as any[];
+}
+
 export async function closeDb() {
   if (sql) {
     await sql.end();

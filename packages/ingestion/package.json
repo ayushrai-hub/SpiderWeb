@@ -8,9 +8,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@intel/types": "workspace:*",
     "@intel/shared": "workspace:*",
-    "csv-parse": "^5.5.0"
+    "@intel/types": "workspace:*",
+    "csv-parse": "^5.5.0",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

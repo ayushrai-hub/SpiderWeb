@@ -1,4 +1,4 @@
-import { extractArchive, cleanupExtractedFiles, type IngestionManifest } from './archive-handler.js';
+import { extractArchive, parseExtractedFiles, cleanupExtractedFiles, type IngestionManifest } from './archive-handler.js';
 import { normalizeData, type NormalizationResult } from './normalizer.js';
 import { resolveEntities, type ResolutionResult } from './entity-resolution.js';
 
@@ -27,6 +27,7 @@ export interface IngestionStats {
   messagesCreated: number;
   activitiesCreated: number;
   jobsCreated: number;
+  employmentCreated: number;
   educationCreated: number;
   skillsCreated: number;
   entitiesMatched: number;
@@ -73,6 +74,7 @@ export async function runIngestionPipeline(
       messagesCreated: 0,
       activitiesCreated: 0,
       jobsCreated: 0,
+      employmentCreated: 0,
       educationCreated: 0,
       skillsCreated: 0,
       entitiesMatched: 0,
@@ -88,15 +90,16 @@ export async function runIngestionPipeline(
   };
 
   try {
-    // Step 1: Extract and inventory
+    // Step 1: Extract and inventory (safe streaming extraction)
     pipeline.status = 'extracting';
     pipeline.manifest = extractArchive(archivePath, importId, tempDir);
     pipeline.stats.filesDetected = pipeline.manifest.inventory.totalFiles;
-    
-    // Step 2: Parse files (already done during extraction)
+
+    // Step 2: Parse supported files only
     pipeline.status = 'parsing';
+    parseExtractedFiles(pipeline.manifest);
     pipeline.stats.filesProcessed = pipeline.manifest.inventory.knownFiles;
-    pipeline.stats.filesSkipped = pipeline.manifest.inventory.unknownFiles;
+    pipeline.stats.filesSkipped = pipeline.manifest.inventory.unknownFiles + pipeline.manifest.inventory.optionalFiles;
     
     // Count records
     for (const [, result] of pipeline.manifest.parseResults) {
@@ -125,6 +128,7 @@ export async function runIngestionPipeline(
     pipeline.stats.messagesCreated = pipeline.normalization.messages.length;
     pipeline.stats.activitiesCreated = pipeline.normalization.activities.length;
     pipeline.stats.jobsCreated = pipeline.normalization.jobs.length;
+    pipeline.stats.employmentCreated = pipeline.normalization.employment.length;
     pipeline.stats.educationCreated = pipeline.normalization.education.length;
     pipeline.stats.skillsCreated = pipeline.normalization.skills.length;
     pipeline.stats.entitiesMatched = pipeline.resolution.stats.matchedPersons + pipeline.resolution.stats.matchedCompanies;

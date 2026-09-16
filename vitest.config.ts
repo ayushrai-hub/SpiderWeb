@@ -15,11 +15,13 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@intel/shared': path.resolve(__dirname, 'packages/shared/src'),
-      '@intel/types': path.resolve(__dirname, 'packages/types/src'),
-      '@intel/database': path.resolve(__dirname, 'packages/database/src'),
-      '@intel/ingestion': path.resolve(__dirname, 'packages/ingestion/src'),
-    },
+    alias: [
+      { find: '@intel/shared', replacement: path.resolve(__dirname, 'packages/shared/src') },
+      { find: '@intel/types', replacement: path.resolve(__dirname, 'packages/types/src') },
+      { find: '@intel/database', replacement: path.resolve(__dirname, 'packages/database/src') },
+      { find: '@intel/ingestion', replacement: path.resolve(__dirname, 'packages/ingestion/src') },
+      // fflate is a dependency of @intel/ingestion, not the root — resolve from there
+      { find: /^fflate$/, replacement: path.resolve(__dirname, 'packages/ingestion/node_modules/fflate') },
+    ],
   },
 });

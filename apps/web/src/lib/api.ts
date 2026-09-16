@@ -33,6 +33,51 @@ async function fetchApi<T>(
   return response.json();
 }
 
+/**
+ * Upload one or more files with real progress via XHR.
+ * Files: ZIP archive and/or individual LinkedIn CSV/JSON files.
+ */
+export function uploadImportWithProgress(
+  files: File[],
+  onProgress: (percent: number) => void
+): Promise<{ data: { importId: string; jobId: string; status: string; fileCount: number; rejected: { filename: string; reason: string }[] } }> {
+  return new Promise((resolve, reject) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const workspaceId = typeof window !== "undefined" ? localStorage.getItem("workspaceId") : null;
+
+    const formData = new FormData();
+    for (const f of files) formData.append("files", f, f.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/api/v1/imports/upload`);
+
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    if (workspaceId) xhr.setRequestHeader("X-Workspace-Id", workspaceId);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+
+    xhr.onload = () => {
+      try {
+        const body = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(body);
+        } else {
+          reject(new Error(body?.error?.message || `Upload failed (${xhr.status})`));
+        }
+      } catch {
+        reject(new Error(`Upload failed (${xhr.status})`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during upload — check your connection and try again"));
+    xhr.ontimeout = () => reject(new Error("Upload timed out — try a smaller file or check your connection"));
+
+    xhr.send(formData);
+  });
+}
+
 export const api = {
   // People
   getPeople: (params?: Record<string, string>) =>
@@ -140,6 +185,9 @@ export const api = {
   // Imports
   getImports: () =>
     fetchApi<{ data: any[]; pagination: any }>("/api/v1/imports"),
+
+  cancelImport: (id: string) =>
+    fetchApi<{ data: any }>(`/api/v1/imports/${id}/cancel`, { method: "POST" }),
 
   getImport: (id: string) =>
     fetchApi<{ data: any }>(`/api/v1/imports/${id}`),
