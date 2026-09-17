@@ -2,15 +2,35 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  Card,
+  PageHeader,
+  EmptyState,
+  ErrorState,
+  SkeletonRows,
+  Pagination,
+  LinkButton,
+} from "@/components/ui";
 
 export default function People() {
+  const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery({
+  // Debounce search input 250ms
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(input);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [input]);
+
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["people", search, page],
     queryFn: () => api.getPeople({ search, page: String(page), limit: "20" }),
+    placeholderData: (prev) => prev, // keep table during page change
   });
 
   const people = data?.data || [];
@@ -18,82 +38,88 @@ export default function People() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">People</h1>
-      
-      {/* Search */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex gap-4">
-          <input
-            type="text"
-            placeholder="Search people..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="flex-1 border rounded-lg px-4 py-2"
-          />
-        </div>
+      <PageHeader
+        title="People"
+        subtitle={
+          pagination?.total !== undefined
+            ? `${pagination.total} people in your network`
+            : "Everyone in your imported network"
+        }
+      />
+
+      <div className="mb-4">
+        <label htmlFor="people-search" className="sr-only">Search people</label>
+        <input
+          id="people-search"
+          type="search"
+          placeholder="Search name, headline or location…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="input max-w-md"
+        />
       </div>
 
-      {/* People table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {isLoading ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-500">Loading...</td>
-              </tr>
-            ) : people.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-500">No people found</td>
-              </tr>
-            ) : (
-              people.map((person: any) => (
-                <tr key={person.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{person.full_name}</div>
-                    <div className="text-sm text-gray-500">{person.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{person.company_name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{person.title}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{person.location}</td>
-                </tr>
-              ))
+      <Card>
+        {error ? (
+          <ErrorState onRetry={() => refetch()} />
+        ) : isLoading ? (
+          <SkeletonRows rows={8} cols={4} />
+        ) : people.length === 0 ? (
+          <EmptyState
+            title={search ? "No matches" : "No people yet"}
+            description={
+              search
+                ? `Nothing matches "${search}". Try a different search.`
+                : "Import your LinkedIn archive to populate your network."
+            }
+            action={!search ? <LinkButton href="/imports" variant="primary">Import your data</LinkButton> : undefined}
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Headline</th>
+                    <th scope="col">Location</th>
+                    <th scope="col" className="w-10"><span className="sr-only">Profile</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {people.map((person: any) => (
+                    <tr key={person.id} className={isFetching ? "opacity-60" : undefined}>
+                      <td className="font-medium text-ink">{person.name || "—"}</td>
+                      <td className="text-ink-2 max-w-xs truncate">{person.headline || "—"}</td>
+                      <td className="text-ink-2">{person.location || "—"}</td>
+                      <td>
+                        {person.profile_url && (
+                          <a
+                            href={person.profile_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${person.name} on LinkedIn`}
+                            className="text-accent hover:underline focus-ring rounded"
+                          >
+                            ↗
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {pagination && (
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                onChange={setPage}
+              />
             )}
-          </tbody>
-        </table>
-        
-        {/* Pagination */}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="bg-gray-50 px-6 py-3 flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Showing {((page - 1) * 20) + 1} to {Math.min(page * 20, pagination.total)} of {pagination.total}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-                disabled={page === pagination.totalPages}
-                className="px-3 py-1 border rounded disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

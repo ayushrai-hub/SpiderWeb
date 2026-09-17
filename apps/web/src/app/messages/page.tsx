@@ -2,15 +2,43 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  Card,
+  PageHeader,
+  EmptyState,
+  ErrorState,
+  SkeletonRows,
+  Pagination,
+  LinkButton,
+} from "@/components/ui";
+
+const DIRECTIONS = ["all", "inbound", "outbound"] as const;
 
 export default function Messages() {
+  const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [direction, setDirection] = useState<(typeof DIRECTIONS)[number]>("all");
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["messages", search, page],
-    queryFn: () => api.getMessages({ search, page: String(page), limit: "20" }),
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(input);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [input]);
+
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ["messages", search, page, direction],
+    queryFn: () =>
+      api.getMessages({
+        search,
+        page: String(page),
+        limit: "20",
+        ...(direction !== "all" ? { direction } : {}),
+      }),
+    placeholderData: (prev) => prev,
   });
 
   const messages = data?.data || [];
@@ -18,70 +46,98 @@ export default function Messages() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Messages</h1>
-      
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex gap-4">
-          <input
-            type="text"
-            placeholder="Search messages..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="flex-1 border rounded-lg px-4 py-2"
-          />
+      <PageHeader
+        title="Messages"
+        subtitle={pagination?.total !== undefined ? `${pagination.total} messages` : undefined}
+      />
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label htmlFor="msg-search" className="sr-only">Search messages</label>
+        <input
+          id="msg-search"
+          type="search"
+          placeholder="Search message content…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="input max-w-md"
+        />
+        <div role="radiogroup" aria-label="Filter by direction" className="flex rounded-md border border-line-strong p-0.5">
+          {DIRECTIONS.map((d) => (
+            <button
+              key={d}
+              role="radio"
+              aria-checked={direction === d}
+              onClick={() => { setDirection(d); setPage(1); }}
+              className={`rounded px-3 py-1 text-secondary capitalize transition-colors focus-ring ${
+                direction === d ? "bg-raised font-medium text-ink" : "text-ink-2 hover:text-ink"
+              }`}
+            >
+              {d}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Direction</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {isLoading ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
-            ) : messages.length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">No messages found</td></tr>
-            ) : (
-              messages.map((msg: any) => (
-                <tr key={msg.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{msg.senderName || msg.senderEmail}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{msg.recipientName || msg.recipientEmail}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">{msg.subject}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(msg.sentAt || msg.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      msg.direction === 'outbound' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                    }`}>
-                      {msg.direction}
-                    </span>
-                  </td>
-                </tr>
-              ))
+      <Card>
+        {error ? (
+          <ErrorState onRetry={() => refetch()} />
+        ) : isLoading ? (
+          <SkeletonRows rows={8} cols={4} />
+        ) : messages.length === 0 ? (
+          <EmptyState
+            title={search || direction !== "all" ? "No matching messages" : "No messages yet"}
+            description={
+              search || direction !== "all"
+                ? "Try clearing the search or direction filter."
+                : "Messages from your LinkedIn import appear here."
+            }
+            action={!search && direction === "all" ? <LinkButton href="/imports" variant="primary">Import your data</LinkButton> : undefined}
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th scope="col">Content</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Direction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {messages.map((msg: any) => (
+                    <tr key={msg.id} className={isFetching ? "opacity-60" : undefined}>
+                      <td className="max-w-lg">
+                        <p className="truncate text-ink">{msg.content || "—"}</p>
+                        {msg.source_file && (
+                          <p className="text-caption text-ink-3">{msg.source_file}</p>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap text-ink-2">
+                        {msg.sent_at || msg.createdAt
+                          ? new Date(msg.sent_at || msg.createdAt).toLocaleDateString()
+                          : "—"}
+                      </td>
+                      <td>
+                        <span className={`badge ${msg.direction === "outbound" ? "badge-accent" : "badge-neutral"}`}>
+                          {msg.direction === "outbound" ? "Sent" : "Received"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {pagination && (
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                onChange={setPage}
+              />
             )}
-          </tbody>
-        </table>
-        
-        {pagination && pagination.totalPages > 1 && (
-          <div className="bg-gray-50 px-6 py-3 flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Showing {((page - 1) * 20) + 1} to {Math.min(page * 20, pagination.total)} of {pagination.total}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">Previous</button>
-              <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page === pagination.totalPages} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
-            </div>
-          </div>
+          </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

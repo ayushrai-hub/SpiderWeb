@@ -2,15 +2,34 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  Card,
+  PageHeader,
+  EmptyState,
+  ErrorState,
+  SkeletonRows,
+  Pagination,
+  LinkButton,
+} from "@/components/ui";
 
 export default function Companies() {
+  const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery({
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(input);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [input]);
+
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["companies", search, page],
     queryFn: () => api.getCompanies({ search, page: String(page), limit: "20" }),
+    placeholderData: (prev) => prev,
   });
 
   const companies = data?.data || [];
@@ -18,65 +37,84 @@ export default function Companies() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Companies</h1>
-      
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex gap-4">
-          <input
-            type="text"
-            placeholder="Search companies..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="flex-1 border rounded-lg px-4 py-2"
-          />
-        </div>
+      <PageHeader
+        title="Companies"
+        subtitle={pagination?.total !== undefined ? `${pagination.total} companies` : undefined}
+      />
+
+      <div className="mb-4">
+        <label htmlFor="co-search" className="sr-only">Search companies</label>
+        <input
+          id="co-search"
+          type="search"
+          placeholder="Search companies…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="input max-w-md"
+        />
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Industry</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connections</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {isLoading ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
-            ) : companies.length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">No companies found</td></tr>
-            ) : (
-              companies.map((company: any) => (
-                <tr key={company.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{company.name}</div>
-                    <div className="text-sm text-gray-500">{company.domain}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.industry}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.size}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.headquarters}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.connectionCount || 0}</td>
-                </tr>
-              ))
+      <Card>
+        {error ? (
+          <ErrorState onRetry={() => refetch()} />
+        ) : isLoading ? (
+          <SkeletonRows rows={8} cols={4} />
+        ) : companies.length === 0 ? (
+          <EmptyState
+            title={search ? "No matching companies" : "No companies yet"}
+            description={
+              search
+                ? `Nothing matches "${search}".`
+                : "Companies come from your Positions and Connections imports."
+            }
+            action={!search ? <LinkButton href="/imports" variant="primary">Import your data</LinkButton> : undefined}
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th scope="col">Company</th>
+                    <th scope="col">Industry</th>
+                    <th scope="col">Location</th>
+                    <th scope="col" className="w-10"><span className="sr-only">LinkedIn</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {companies.map((company: any) => (
+                    <tr key={company.id} className={isFetching ? "opacity-60" : undefined}>
+                      <td className="font-medium text-ink">{company.canonical_name ?? company.name ?? "—"}</td>
+                      <td className="text-ink-2">{company.industry || "—"}</td>
+                      <td className="text-ink-2">{company.location || "—"}</td>
+                      <td>
+                        {(company.linkedin_url || company.linkedinUrl) && (
+                          <a
+                            href={company.linkedin_url || company.linkedinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${company.canonical_name ?? company.name} on LinkedIn`}
+                            className="text-accent hover:underline focus-ring rounded"
+                          >
+                            ↗
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {pagination && (
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                onChange={setPage}
+              />
             )}
-          </tbody>
-        </table>
-        
-        {pagination && pagination.totalPages > 1 && (
-          <div className="bg-gray-50 px-6 py-3 flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Showing {((page - 1) * 20) + 1} to {Math.min(page * 20, pagination.total)} of {pagination.total}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">Previous</button>
-              <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page === pagination.totalPages} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
-            </div>
-          </div>
+          </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

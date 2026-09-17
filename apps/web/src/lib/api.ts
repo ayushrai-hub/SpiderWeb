@@ -1,5 +1,34 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+async function downloadFile(path: string): Promise<void> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const workspaceId = typeof window !== "undefined" ? localStorage.getItem("workspaceId") : null;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(workspaceId && { "X-Workspace-Id": workspaceId }),
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error("Export failed — try again");
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download =
+    res.headers
+      .get("Content-Disposition")
+      ?.match(/filename="(.+)"/)?.[1] || "spiderweb-export";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function fetchApi<T>(
   path: string,
   options: RequestInit = {}
@@ -214,6 +243,24 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  // Profile
+  getProfile: () => fetchApi<{ data: any }>("/api/v1/profile"),
+
+  getProfileAnalytics: () => fetchApi<{ data: any }>("/api/v1/profile/analytics"),
+
+  // Exports (raw download — do not JSON-parse)
+  exportAnalytics: async () => {
+    await downloadFile("/api/v1/exports/analytics.json");
+  },
+
+  exportConnections: async () => {
+    await downloadFile("/api/v1/exports/connections.csv");
+  },
+
+  exportCompanies: async () => {
+    await downloadFile("/api/v1/exports/companies.csv");
   },
 
   // Graph
