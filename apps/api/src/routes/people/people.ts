@@ -10,7 +10,7 @@ const personQuerySchema = z.object({
   company: z.string().optional(),
   title: z.string().optional(),
   location: z.string().optional(),
-  sortBy: z.enum(['full_name', 'created_at', 'updated_at']).default('full_name'),
+  sortBy: z.enum(['canonical_name', 'created_at', 'updated_at']).default('canonical_name'),
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
 });
 
@@ -28,19 +28,18 @@ export async function peopleRoutes(app: FastifyInstance): Promise<void> {
       .eq('workspace_id', workspaceId);
 
     if (query.search) {
+      // Only columns that exist in the people table
       queryBuilder = queryBuilder.or(
-        `full_name.ilike.%${query.search}%,email.ilike.%${query.search}%,company_name.ilike.%${query.search}%`
+        `canonical_name.ilike.%${query.search}%,headline.ilike.%${query.search}%,location.ilike.%${query.search}%`
       );
     }
 
     if (query.company) {
-      queryBuilder = queryBuilder.ilike('company_name', `%${query.company}%`);
+      queryBuilder = queryBuilder.ilike('headline', `%${query.company}%`);
     }
-
     if (query.title) {
-      queryBuilder = queryBuilder.ilike('title', `%${query.title}%`);
+      queryBuilder = queryBuilder.ilike('headline', `%${query.title}%`);
     }
-
     if (query.location) {
       queryBuilder = queryBuilder.ilike('location', `%${query.location}%`);
     }
@@ -53,13 +52,23 @@ export async function peopleRoutes(app: FastifyInstance): Promise<void> {
       .range(from, to);
 
     if (error) {
+      request.log.error(error, 'people list query failed');
       return reply.status(500).send({
-        error: { code: 'QUERY_FAILED', message: error.message },
+        error: { code: 'QUERY_FAILED', message: 'Could not load people. Try again.' },
       });
     }
 
     return reply.send({
-      data,
+      data: (data || []).map((p: any) => ({
+        id: p.id,
+        name: p.canonical_name,
+        first_name: p.first_name,
+        last_name: p.last_name,
+        headline: p.headline,
+        location: p.location,
+        profile_url: p.profile_url,
+        created_at: p.created_at,
+      })),
       pagination: {
         page: query.page,
         limit: query.limit,
@@ -87,17 +96,23 @@ export async function peopleRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Get related data
+    // skills/education tables have no workspace_id column — filter by person only
     const [connections, skills, education, employment] = await Promise.all([
-      supabase.from('connections').select('*').eq('person_id', personId).eq('workspace_id', workspaceId),
-      supabase.from('skills').select('*').eq('person_id', personId).eq('workspace_id', workspaceId),
-      supabase.from('education').select('*').eq('person_id', personId).eq('workspace_id', workspaceId),
-      supabase.from('person_employment').select('*').eq('person_id', personId).eq('workspace_id', workspaceId),
+      supabase.from('connections').select('*').eq('person_id', personId),
+      supabase.from('skills').select('*').eq('person_id', personId),
+      supabase.from('education').select('*').eq('person_id', personId),
+      supabase.from('person_employment').select('*').eq('person_id', personId),
     ]);
 
     return reply.send({
       data: {
-        ...data,
+        id: data.id,
+        name: data.canonical_name,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        headline: data.headline,
+        location: data.location,
+        profile_url: data.profile_url,
         connections: connections.data || [],
         skills: skills.data || [],
         education: education.data || [],

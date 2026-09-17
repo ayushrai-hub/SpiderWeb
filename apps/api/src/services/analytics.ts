@@ -367,7 +367,7 @@ export async function getDataQualityAnalytics(workspaceId: string): Promise<Data
 
   const allImports = imports || [];
   const totalFiles = allImports.reduce((sum, imp) => 
-    sum + (imp.metadata?.stats?.filesDetected || 0), 0);
+    sum + (imp.metadata?.stats?.files_detected || imp.file_count || 0), 0);
   const successfullyParsed = allImports.filter(imp => imp.status === 'completed').length;
   const failed = allImports.filter(imp => imp.status === 'failed').length;
 
