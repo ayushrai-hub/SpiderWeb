@@ -144,7 +144,7 @@ export function answerQuestion(
     case 'recent_movers':
       return {
         intent,
-        answer: `${ctx.career.peopleWithMultipleEmployers} people have more than one employer on record (${ctx.career.moves.length} transitions).`,
+        answer: `${ctx.career.peopleWithMultipleEmployers} ${ctx.career.peopleWithMultipleEmployers === 1 ? 'person has' : 'people have'} more than one employer on record (${ctx.career.moves.length} transitions).`,
         records: ctx.career.moves.slice(0, 50).map((m) => ({
           personId: m.personId,
           name: m.name,

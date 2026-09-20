@@ -159,7 +159,7 @@ export function generateInsights(input: {
   if (input.career.peopleWithMultipleEmployers > 0) {
     insights.push({
       id: 'career-moves',
-      title: `${input.career.peopleWithMultipleEmployers} people have more than one employer on record`,
+      title: `${input.career.peopleWithMultipleEmployers} ${input.career.peopleWithMultipleEmployers === 1 ? 'person has' : 'people have'} more than one employer on record`,
       description: `${input.career.moves.length} company-to-company transitions were reconstructed from employment rows. ${input.career.limitations[0]}`,
       category: 'career',
       confidence: 'high',

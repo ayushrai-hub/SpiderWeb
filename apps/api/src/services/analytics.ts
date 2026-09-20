@@ -173,11 +173,19 @@ async function persistSnapshot(workspaceId: string, report: AnalyticsReport): Pr
   try {
     await query(
       `INSERT INTO analytics_snapshots (workspace_id, snapshot_date, metric_type, metric_data)
-       VALUES ($1, now(), 'network_report', $2::jsonb)`,
+       SELECT $1, now(), 'network_report', $2::jsonb
+       WHERE NOT EXISTS (
+         SELECT 1 FROM analytics_snapshots s
+         WHERE s.workspace_id = $1 AND s.metric_type = 'network_report'
+           AND s.snapshot_date >= COALESCE(
+             (SELECT max(processing_completed_at) FROM imports WHERE workspace_id = $1),
+             now() - interval '1 hour'
+           )
+       )`,
       [workspaceId, JSON.stringify(report)]
     );
   } catch {
-    // Snapshot is an optimisation; a unique-timestamp collision is harmless.
+    // Snapshot is an optimisation; a missing table or collision is harmless.
   }
 }
 

@@ -686,12 +686,24 @@ export default function AnalyticsPage() {
           <button
             type="button"
             className="absolute inset-0 bg-ink/40"
-            aria-label="Close"
+            aria-label="Dismiss insight"
             onClick={() => setInsight(null)}
           />
-          <div className="card relative z-10 max-h-[80vh] w-full max-w-lg overflow-y-auto">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="insight-title"
+            className="card relative z-10 max-h-[80vh] w-full max-w-lg overflow-y-auto"
+          >
             <div className="card-pad">
-              <p className="text-h3 text-ink">{insight.title}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p id="insight-title" className="text-h3 text-ink">
+                  {insight.title}
+                </p>
+                <Button type="button" variant="secondary" size="sm" onClick={() => setInsight(null)}>
+                  Close
+                </Button>
+              </div>
               <p className="mt-2 text-secondary text-ink-2">{insight.description}</p>
               <dl className="mt-4 space-y-2 text-secondary">
                 <div>
