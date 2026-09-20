@@ -1,51 +1,30 @@
+# Next.js standalone output keeps the runtime image small: only the traced
+# server dependencies are copied, not the whole workspace node_modules.
+
 FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Build stage
 FROM base AS builder
 WORKDIR /app
-
-# Copy package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/*/package.json ./packages/
-COPY apps/web/package.json ./apps/web/
-
-# Install dependencies
-RUN pnpm install --frozen-lockfile
-
-# Copy source code
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
-COPY tsconfig.base.json tsconfig.json ./
-
-# Build
+RUN pnpm install --frozen-lockfile --filter @intel/web...
+# Baked into the client bundle at build time, so it must be set here.
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm --filter @intel/web build
 
-# Production stage
 FROM node:20-alpine AS runner
 WORKDIR /app
-
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Copy built application
-COPY --from=builder /app/apps/web/.next ./.next
-COPY --from=builder /app/apps/web/public ./public
-COPY --from=builder /app/apps/web/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
-
-# Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
-
-# Expose port
+ENV HOSTNAME=0.0.0.0
+RUN addgroup -S app && adduser -S app -G app
+COPY --from=builder --chown=app:app /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=app:app /app/apps/web/.next/static ./apps/web/.next/static
+USER app
 EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-# Start application
-CMD ["node", "node_modules/.bin/next", "start"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3000),r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
+CMD ["node", "apps/web/server.js"]

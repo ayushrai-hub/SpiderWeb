@@ -1,42 +1,83 @@
-// CSV Parser
-export { parseCsv, detectDelimiter, detectEncoding } from './csv-parser.js';
-export type { CsvParseOptions, CsvParseResult } from './csv-parser.js';
-
-// LinkedIn Adapters
-export { getLinkedInAdapters, matchAdapter, identifyFileType } from './linkedin/adapters.js';
-export type { LinkedInAdapter } from './linkedin/adapters.js';
-
-// Archive Handler
+// Text + date normalisation primitives
 export {
-  extractArchive,
-  parseExtractedFiles,
-  cleanupExtractedFiles,
-  classifyFile,
-  ArchiveError,
-  EXTRACTION_LIMITS,
-} from './archive-handler.js';
-export type { ArchiveInventory, ArchiveFile, IngestionManifest } from './archive-handler.js';
+  clean,
+  cleanOptional,
+  comparisonKey,
+  normalizeName,
+  fullName,
+  normalizeProfileUrl,
+  profileSlug,
+  normalizeCompanyUrl,
+  normalizeEmail,
+  normalizePhone,
+  normalizeCompanyName,
+  companyKey,
+  normalizeTitle,
+  normalizeLocation,
+  normalizeSchool,
+  parseDate,
+  toDateOnly,
+  parseCount,
+  truncate,
+} from './text.js';
 
-// Normalizer
-export { normalizeData } from './normalizer.js';
+// CSV
+export { parseCsvBuffer, parseCsvFile, detectDelimiter, detectEncoding, headerKey } from './csv-parser.js';
+export type { CsvParseResult, ParseOptions } from './csv-parser.js';
+
+// Dataset catalogue + detection
+export {
+  DATASETS,
+  getDataset,
+  detectDataset,
+  matchByFilename,
+  matchByHeaders,
+  isIgnoredFilename,
+  IGNORED_FILENAMES,
+} from './datasets.js';
+export type { DatasetKey, DatasetSpec, DatasetCategory } from './datasets.js';
+
+// Archive handling
+export { extractArchive, isZipFile, cleanupDir, ArchiveError, EXTRACTION_LIMITS } from './archive.js';
+export type { ExtractedEntry, ExtractionResult } from './archive.js';
+
+// Normalisation
+export {
+  normalizeDatasets,
+  reconcileWeakIdentities,
+  personKeyFor,
+  emptyResult,
+  SELF_KEY,
+} from './normalize.js';
 export type {
-  NormalizedPerson,
-  NormalizedCompany,
-  NormalizedConnection,
-  NormalizedMessage,
-  NormalizedActivity,
-  NormalizedJob,
-  NormalizedEmployment,
-  NormalizedEducation,
-  NormalizedSkill,
-  NormalizedInsight,
   NormalizationResult,
-} from './normalizer.js';
+  ParsedDataset,
+  CanonicalPerson,
+  CanonicalCompany,
+  CanonicalConnection,
+  CanonicalEmployment,
+  CanonicalEducation,
+  CanonicalSkill,
+  CanonicalMessage,
+  CanonicalActivity,
+  CanonicalJob,
+  CanonicalInteraction,
+  DatasetOutcome,
+} from './normalize.js';
 
-// Entity Resolution
-export { resolveEntities } from './entity-resolution.js';
-export type { EntityMatch, ResolutionResult } from './entity-resolution.js';
+// Persistence + derivation
+export { persist, emptyStats } from './persist.js';
+export type { PersistStats, PersistContext } from './persist.js';
+export { deriveIntelligence } from './derive.js';
+export type { DerivationStats } from './derive.js';
 
-// Pipeline
-export { runIngestionPipeline, formatIngestionSummary } from './pipeline.js';
-export type { IngestionPipeline, IngestionStats, IngestionOptions } from './pipeline.js';
+// Orchestration
+export { runImport } from './runner.js';
+export type {
+  RunImportOptions,
+  ImportLogger,
+  ImportOutcome,
+  ImportFileOutcome,
+  ImportStatus,
+  UploadedFile,
+} from './runner.js';

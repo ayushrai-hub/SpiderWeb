@@ -1,53 +1,40 @@
 import type { FastifyInstance } from 'fastify';
-import { getDb, checkRedisHealth, checkS3Health, loadEnv } from '@intel/shared';
+import { checkDatabaseHealth, checkRedisHealth, getEnv, query } from '@intel/shared';
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
-  const env = loadEnv();
+  app.get('/health', async () => ({ status: 'ok', uptime: Math.round(process.uptime()) }));
 
-  app.get('/health', async () => ({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  }));
+  /**
+   * Readiness: reports the state of every dependency plus whether the schema is
+   * migrated, so a broken deployment is visible without reading logs.
+   */
+  app.get('/health/ready', async (_request, reply) => {
+    const env = getEnv();
+    const database = await checkDatabaseHealth();
+    const redis = env.REDIS_URL ? await checkRedisHealth() : null;
 
-  app.get('/health/db', async () => {
-    try {
-      const db = getDb();
-      await db.execute('SELECT 1');
-      return {
-        status: 'ok',
-        component: 'postgresql',
-        timestamp: new Date().toISOString(),
-      };
-    } catch {
-      return {
-        status: 'error',
-        component: 'postgresql',
-        timestamp: new Date().toISOString(),
-      };
+    let migrated = false;
+    let pendingHint: string | null = null;
+    if (database) {
+      const rows = await query<{ ok: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_name = 'people' AND column_name = 'dedupe_key'
+         ) AS ok`
+      );
+      migrated = rows[0]?.ok === true;
+      if (!migrated) pendingHint = 'Run `pnpm db:migrate`.';
     }
-  });
 
-  app.get('/health/redis', async () => {
-    const healthy = await checkRedisHealth(env.REDIS_URL);
-    return {
-      status: healthy ? 'ok' : 'error',
-      component: 'redis',
-      timestamp: new Date().toISOString(),
-    };
-  });
-
-  app.get('/health/storage', async () => {
-    const healthy = await checkS3Health({
-      endpoint: env.S3_ENDPOINT,
-      accessKey: env.S3_ACCESS_KEY,
-      secretKey: env.S3_SECRET_KEY,
-      bucket: env.S3_BUCKET,
-      region: env.S3_REGION,
+    const ready = database && migrated && (env.INGESTION_MODE !== 'queue' || redis === true);
+    return reply.status(ready ? 200 : 503).send({
+      status: ready ? 'ready' : 'not_ready',
+      checks: {
+        database: { ok: database },
+        migrations: { ok: migrated, hint: pendingHint },
+        redis: { ok: redis, required: env.INGESTION_MODE === 'queue' },
+      },
+      ingestionMode: env.INGESTION_MODE,
     });
-    return {
-      status: healthy ? 'ok' : 'error',
-      component: 's3',
-      timestamp: new Date().toISOString(),
-    };
   });
 }

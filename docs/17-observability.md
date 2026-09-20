@@ -22,6 +22,7 @@ All logs JSON. Minimum fields:
 ## What to Log
 
 ### API Layer
+
 - Request received (method, path, query params)
 - Authentication result (success/failure, reason)
 - Authorization result (workspace access check)
@@ -29,6 +30,7 @@ All logs JSON. Minimum fields:
 - Errors (stack trace, request context)
 
 ### Ingestion Pipeline
+
 - File uploaded (size, type, checksum)
 - Archive extracted (file count)
 - Schema detected (source type, version)
@@ -38,12 +40,14 @@ All logs JSON. Minimum fields:
 - Import completed (total duration, records, errors)
 
 ### AI Agent
+
 - Conversation started
 - Tool called (name, parameters, duration, result size)
 - Response generated (tokens used, tools invoked)
 - Error occurred (tool, error type)
 
 ### Background Jobs
+
 - Job enqueued (queue, job type, payload size)
 - Job started (worker, attempt)
 - Job completed (duration, result)
@@ -60,6 +64,7 @@ All logs JSON. Minimum fields:
 ## Monitoring
 
 ### Metrics (Prometheus)
+
 - Request rate, latency, error rate per endpoint
 - Import pipeline throughput
 - Worker queue depth and processing rate
@@ -68,11 +73,13 @@ All logs JSON. Minimum fields:
 - Redis memory and operation rate
 
 ### Tracing
+
 - OpenTelemetry for distributed tracing
 - Trace ID propagated through request → worker → response
 - Span for each pipeline stage
 
 ### Alerting
+
 - Error rate > 1% for 5 minutes
 - Import failure rate > 5%
 - Worker queue depth > 1000

@@ -9,6 +9,7 @@ Enrich private user data with permitted public-web information. Separate subsyst
 ## Data Separation
 
 System must distinguish and label:
+
 - **PRIVATE_DATA** — from user's imports
 - **PUBLIC_WEB_DATA** — from permitted web sources
 - **INFERRED_DATA** — model-derived

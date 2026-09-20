@@ -1,116 +1,133 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import LinkedInDropZone from "@/components/upload/LinkedInDropZone";
+import Link from "next/link";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { formatDate, formatDuration, formatNumber, relativeTime } from "@/lib/format";
+import {
+  Badge,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  Pagination,
+  SkeletonRows,
+} from "@/components/ui";
+import { ImportDropzone } from "@/components/import/ImportDropzone";
+import { STATUS_LABEL, STATUS_TONE } from "@/lib/import-status";
 
-export default function Imports() {
-  const queryClient = useQueryClient();
-  const [deleting, setDeleting] = useState<string | null>(null);
+export default function ImportsPage() {
+  const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["imports"],
-    queryFn: () => api.getImports(),
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["imports", page],
+    queryFn: () => api.imports({ page, limit: 20 }),
+    // Poll only while something is in flight.
     refetchInterval: (query) => {
-      const rows: any[] = query.state.data?.data || [];
-      const active = rows.some((r) => r.status === "pending" || r.status === "processing");
-      return active ? 3000 : false;
+      const rows = query.state.data?.data ?? [];
+      return rows.some((r) => r.status === "pending" || r.status === "processing") ? 1500 : false;
     },
   });
 
-  const handleDelete = async (id: string) => {
-    setDeleting(id);
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/v1/imports/${id}`, {
-        method: "DELETE",
-        headers: {
-          ...(localStorage.getItem("token") && { Authorization: `Bearer ${localStorage.getItem("token")}` }),
-          ...(localStorage.getItem("workspaceId") && { "X-Workspace-Id": localStorage.getItem("workspaceId")! }),
-        },
-      });
-      queryClient.invalidateQueries({ queryKey: ["imports"] });
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const imports = data?.data || [];
+  const imports = data?.data ?? [];
+  const pagination = data?.pagination;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Imports</h1>
+      <PageHeader title="Imports" subtitle="Upload a LinkedIn export and see exactly what happened to it" />
 
-      {/* Upload area */}
-      <div className="bg-white p-6 rounded-lg shadow mb-6">
-        <LinkedInDropZone />
-      </div>
-
-      {/* Imports list */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold">Import History</h2>
+      <Card className="mb-6">
+        <CardHeader title="New import" description="ZIP archive or individual CSV files" />
+        <div className="p-5">
+          <ImportDropzone />
         </div>
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Files</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Records</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {isLoading ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">Loading...</td>
-              </tr>
-            ) : imports.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                  No imports yet. Drop your LinkedIn export above to get started.
-                </td>
-              </tr>
-            ) : (
-              imports.map((imp: any) => (
-                <tr key={imp.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    <a href={`/imports/${imp.id}`} className="text-blue-600 hover:underline">
-                      {imp.source_type}
-                    </a>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{imp.file_count ?? 0}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{imp.total_records ?? 0}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      imp.status === "completed" ? "bg-green-100 text-green-800" :
-                      imp.status === "failed" ? "bg-red-100 text-red-800" :
-                      imp.status === "processing" ? "bg-blue-100 text-blue-800" :
-                      "bg-yellow-100 text-yellow-800"
-                    }`}>
-                      {imp.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(imp.uploaded_at || imp.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleDelete(imp.id)}
-                      disabled={deleting === imp.id}
-                      className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
-                    >
-                      {deleting === imp.id ? "Deleting..." : "Delete"}
-                    </button>
-                  </td>
-                </tr>
-              ))
+      </Card>
+
+      <Card>
+        <CardHeader title="History" />
+        {error ? (
+          <ErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => refetch()}
+          />
+        ) : isLoading ? (
+          <SkeletonRows rows={4} cols={5} />
+        ) : imports.length === 0 ? (
+          <EmptyState
+            title="No imports yet"
+            description="Your first import will appear here with a full breakdown of what was read."
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th scope="col">File</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" className="hidden text-right sm:table-cell">
+                      Imported
+                    </th>
+                    <th scope="col" className="hidden text-right md:table-cell">
+                      Updated
+                    </th>
+                    <th scope="col" className="hidden text-right md:table-cell">
+                      Duplicates
+                    </th>
+                    <th scope="col" className="text-right">
+                      When
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {imports.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <Link
+                          href={`/imports/${row.id}`}
+                          className="font-medium text-ink hover:text-accent focus-ring rounded"
+                        >
+                          {row.filename ?? "Upload"}
+                        </Link>
+                        <span className="ml-2 text-caption text-ink-3">
+                          {row.fileCount} file{row.fileCount === 1 ? "" : "s"}
+                          {row.durationMs !== null && ` · ${formatDuration(row.durationMs)}`}
+                        </span>
+                      </td>
+                      <td>
+                        <Badge tone={STATUS_TONE[row.status]}>{STATUS_LABEL[row.status]}</Badge>
+                        {row.errorMessage && (
+                          <p className="mt-1 max-w-xs text-caption text-danger">{row.errorMessage}</p>
+                        )}
+                      </td>
+                      <td className="hidden text-right tabular-nums text-ink sm:table-cell">
+                        {formatNumber(row.recordsImported)}
+                      </td>
+                      <td className="hidden text-right tabular-nums text-ink-2 md:table-cell">
+                        {formatNumber(row.recordsUpdated)}
+                      </td>
+                      <td className="hidden text-right tabular-nums text-ink-2 md:table-cell">
+                        {formatNumber(row.recordsDuplicate)}
+                      </td>
+                      <td
+                        className="whitespace-nowrap text-right text-ink-2"
+                        title={formatDate(row.uploadedAt)}
+                      >
+                        {relativeTime(row.uploadedAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {pagination && (
+              <Pagination page={pagination.page} totalPages={pagination.totalPages} onChange={setPage} />
             )}
-          </tbody>
-        </table>
-      </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }

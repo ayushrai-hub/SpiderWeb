@@ -41,6 +41,7 @@ IMPORT COMPLETE
 ## Import Record
 
 Every import receives:
+
 - `import_id` — UUID
 - `workspace_id` — tenant scope
 - `source_type` — linkedin, gmail, etc.

@@ -1,216 +1,307 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, ApiRequestError } from "@/lib/api";
+import { formatBytes, formatDate, formatDuration, formatNumber } from "@/lib/format";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  ConfirmDialog,
+  DetailList,
+  ErrorState,
+  LinkButton,
+  PageHeader,
+  SkeletonCard,
+  Stat,
+  Toast,
+} from "@/components/ui";
+import { recoveryAdvice, STATUS_LABEL, STATUS_TONE } from "@/lib/import-status";
 
-const STATUS_STEPS = [
-  { key: "pending", label: "Queued" },
-  { key: "processing", label: "Processing" },
-  { key: "completed", label: "Completed" },
-];
+const FILE_STATUS_TONE = {
+  normalized: "success",
+  parsed: "accent",
+  skipped: "neutral",
+  failed: "danger",
+} as const;
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  processing: "bg-blue-100 text-blue-800",
-  completed: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-};
+const FILE_STATUS_LABEL = {
+  normalized: "Imported",
+  parsed: "Parsed",
+  skipped: "Skipped",
+  failed: "Failed",
+} as const;
 
-function stageLabel(status: string, progress: number): string {
-  if (status === "failed") return "Import failed";
-  if (status === "completed") return "Import complete";
-  if (status === "processing") {
-    if (progress < 40) return "Checking archive & extracting...";
-    if (progress < 60) return "Classifying files...";
-    if (progress < 80) return "Parsing & normalizing...";
-    return "Building your network...";
-  }
-  return "Waiting for a worker...";
-}
+export default function ImportDetailPage() {
+  const { importId } = useParams<{ importId: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState<null | "record" | "withData">(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-export default function ImportStatusPage() {
-  const params = useParams();
-  const importId = params?.importId as string;
-
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["import", importId],
-    queryFn: () => api.getImport(importId),
-    enabled: !!importId,
+    queryFn: () => api.importDetail(importId),
+    enabled: Boolean(importId),
     refetchInterval: (query) => {
-      const status = query.state.data?.data?.status;
-      return status === "completed" || status === "failed" ? false : 2000;
+      const status = query.state.data?.data.status;
+      return status === "pending" || status === "processing" ? 1000 : false;
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (withData: boolean) => api.deleteImport(importId, withData),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["imports"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      router.push("/imports");
+      void result;
     },
   });
 
   if (isLoading) {
-    return <div className="p-6 text-gray-500">Loading import...</div>;
-  }
-
-  if (error || !data?.data) {
     return (
-      <div className="p-6">
-        <div className="rounded-lg bg-red-50 border border-red-200 p-4 max-w-lg">
-          <p className="font-semibold text-red-800">Import not found</p>
-          <p className="mt-1 text-sm text-red-600">
-            It may belong to another workspace or have been deleted.
-          </p>
-        </div>
+      <div>
+        <PageHeader title="Import" />
+        <SkeletonCard className="h-32" />
+        <SkeletonCard className="mt-6 h-64" />
       </div>
     );
   }
 
-  const imp = data.data;
-  const files: any[] = imp.files || [];
-  const progress = Number(imp.jobStatus?.progress ?? 0);
-  const metadata = imp.metadata || {};
-  const stats = metadata.stats || {};
-  const errorCode = metadata.error_code;
-  const isPartial = metadata.partial === true;
+  if (error) {
+    const notFound = error instanceof ApiRequestError && error.status === 404;
+    return (
+      <div>
+        <PageHeader title={notFound ? "Import not found" : "Could not load this import"} />
+        {notFound ? (
+          <Alert variant="info">
+            That import no longer exists.{" "}
+            <Link href="/imports" className="text-accent underline">
+              Back to Imports
+            </Link>
+          </Alert>
+        ) : (
+          <ErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => refetch()}
+          />
+        )}
+      </div>
+    );
+  }
 
-  const supported = files.filter((f) => f.file_type === "csv" || f.file_type === "zip");
-  const failedFiles = files.filter((f) => f.status === "failed");
-  const skipped = metadata.skipped_files ?? 0;
+  const record = data?.data;
+  if (!record) return null;
+
+  const inFlight = record.status === "pending" || record.status === "processing";
+  const imported = record.files.filter((f) => f.dataset);
+  const skipped = record.files.filter((f) => !f.dataset);
+  const stats = record.metadata.stats ?? {};
 
   return (
-    <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold mb-2">Import status</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        {imp.source_type} import · {new Date(imp.uploaded_at).toLocaleString()}
-      </p>
+    <div>
+      <PageHeader
+        title={record.filename ?? "Import"}
+        subtitle={`Uploaded ${formatDate(record.uploadedAt)}`}
+        actions={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/imports")}>
+              ← All imports
+            </Button>
+            {!inFlight && (
+              <Button variant="secondary" size="sm" onClick={() => setConfirmDelete("record")}>
+                Delete
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {/* Status banner */}
-      <div
-        className={`rounded-xl border p-6 mb-6 ${
-          imp.status === "completed"
-            ? "bg-green-50 border-green-200"
-            : imp.status === "failed"
-              ? "bg-red-50 border-red-200"
-              : "bg-blue-50 border-blue-200"
-        }`}
-      >
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[imp.status] || "bg-gray-100"}`}>
-            {imp.status}
-          </span>
-          {imp.checksum && (
-            <span className="text-xs text-gray-400 font-mono">
-              sha256: {String(imp.checksum).slice(0, 12)}…
-            </span>
+      {inFlight && (
+        <Card className="mb-6">
+          <div className="card-pad flex items-center gap-4">
+            <span
+              aria-hidden
+              className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent"
+            />
+            <div>
+              <p className="text-h3 text-ink">
+                {record.status === "pending" ? "Queued for processing" : "Processing your export"}
+              </p>
+              <p className="text-secondary text-ink-2">
+                Extracting, detecting datasets, normalising and saving. This page updates itself.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {record.status === "failed" && (
+        <Alert variant="danger" className="mb-6" title="This import failed">
+          <p>
+            {record.errorMessage ?? "Something went wrong while processing the file."}
+            {record.errorCode && <span className="ml-1 text-caption opacity-70">({record.errorCode})</span>}
+          </p>
+          {recoveryAdvice(record.errorCode) && <p className="mt-2">{recoveryAdvice(record.errorCode)}</p>}
+          <LinkButton href="/imports" variant="secondary" size="sm" className="mt-3">
+            Try another upload
+          </LinkButton>
+        </Alert>
+      )}
+
+      {record.status === "partially_completed" && (
+        <Alert variant="warning" className="mb-6" title="Some files could not be processed">
+          Everything that could be read was imported. The per-file breakdown below shows what failed.
+        </Alert>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        <Stat
+          label="Status"
+          value={<Badge tone={STATUS_TONE[record.status]}>{STATUS_LABEL[record.status]}</Badge>}
+        />
+        <Stat label="Records found" value={formatNumber(record.recordsDiscovered)} />
+        <Stat label="Imported" value={formatNumber(record.recordsImported)} />
+        <Stat label="Updated" value={formatNumber(record.recordsUpdated)} />
+        <Stat
+          label="Duplicates"
+          value={formatNumber(record.recordsDuplicate)}
+          hint="Already in your network"
+        />
+      </div>
+
+      <Card className="mt-6">
+        <CardHeader title="What was created" description="Counts of new records written by this import" />
+        <div className="card-pad">
+          {Object.keys(stats).length === 0 ? (
+            <p className="text-secondary text-ink-3">No breakdown recorded for this import.</p>
+          ) : (
+            <DetailList
+              items={[
+                { label: "People", value: formatNumber(stats.peopleCreated) },
+                { label: "People updated", value: formatNumber(stats.peopleUpdated) },
+                { label: "Connections", value: formatNumber(stats.connectionsCreated) },
+                { label: "Companies", value: formatNumber(stats.companiesCreated) },
+                { label: "Roles", value: formatNumber(stats.employmentCreated) },
+                { label: "Education", value: formatNumber(stats.educationCreated) },
+                { label: "Skills", value: formatNumber(stats.skillsCreated) },
+                { label: "Messages", value: formatNumber(stats.messagesCreated) },
+                { label: "Activities", value: formatNumber(stats.activitiesCreated) },
+                { label: "Jobs", value: formatNumber(stats.jobsCreated) },
+                { label: "Processing time", value: formatDuration(record.durationMs) },
+              ]}
+            />
           )}
         </div>
+      </Card>
 
-        <p className="mt-3 text-lg font-medium text-gray-900">
-          {stageLabel(imp.status, progress)}
-        </p>
-
-        {imp.status !== "completed" && imp.status !== "failed" && (
-          <div className="mt-4 h-2.5 w-full max-w-md rounded-full bg-white overflow-hidden border border-blue-100">
-            <div
-              className="h-full bg-blue-600 transition-all duration-500"
-              style={{ width: `${Math.max(progress, 5)}%` }}
-            />
-          </div>
-        )}
-
-        {imp.status === "failed" && (
-          <div className="mt-3 text-sm text-red-700">
-            {errorCode ? (
-              <>
-                <p className="font-semibold">Reason: {errorCode}</p>
-                <p className="mt-1 text-red-600">
-                  {errorCode === "INVALID_ARCHIVE" &&
-                    "The file wasn't recognized as a valid ZIP archive. Try re-exporting from LinkedIn or uploading the original ZIP."}
-                  {errorCode === "EMPTY_ARCHIVE" &&
-                    "The archive contains no data. Confirm you downloaded the complete LinkedIn export."}
-                  {(errorCode === "EXTRACTION_FAILED" || errorCode === "PROCESSING_FAILED") &&
-                    "Something went wrong while processing the archive. You can retry, or re-upload the original ZIP."}
-                </p>
-              </>
-            ) : (
-              <p>Processing failed unexpectedly. Try re-uploading your export.</p>
-            )}
-          </div>
-        )}
-
-        {imp.status === "completed" && (
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: "People", value: stats.persons_created ?? 0 },
-              { label: "Companies", value: stats.companies_created ?? 0 },
-              { label: "Connections", value: stats.connections_created ?? 0 },
-              { label: "Messages", value: stats.messages_created ?? 0 },
-            ].map((s) => (
-              <div key={s.label} className="bg-white rounded-lg p-3 border">
-                <p className="text-xs text-gray-500">{s.label}</p>
-                <p className="text-xl font-bold">{s.value}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {isPartial && imp.status === "completed" && (
-          <p className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-            Import completed with warnings. {files.length - failedFiles.length} file(s) processed
-            successfully{failedFiles.length > 0 ? `, ${failedFiles.length} could not be parsed` : ""}
-            {skipped > 0 ? `, ${skipped} skipped` : ""}.
-          </p>
-        )}
-      </div>
-
-      {/* Per-file results */}
-      <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold">
-            Files ({supported.length} found, {files.length - failedFiles.length} supported,{" "}
-            {failedFiles.length} failed, {skipped} skipped)
-          </h2>
-        </div>
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">File</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Records</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {files.map((f) => {
-              const errs: string[] = Array.isArray(f.errors) ? f.errors : [];
-              return (
-                <tr key={f.id}>
-                  <td className="px-6 py-3 text-sm font-medium text-gray-900">{f.filename}</td>
-                  <td className="px-6 py-3 text-sm text-gray-500">{f.file_type}</td>
-                  <td className="px-6 py-3">
-                    <span
-                      className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                        f.status === "failed"
-                          ? "bg-red-100 text-red-800"
-                          : f.status === "pending"
-                            ? "bg-gray-100 text-gray-600"
-                            : "bg-green-100 text-green-800"
-                      }`}
-                    >
-                      {f.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3 text-sm text-gray-500">{f.record_count ?? 0}</td>
-                  <td className="px-6 py-3 text-xs text-red-600 max-w-xs truncate">
-                    {errs.length > 0 ? errs[0] : ""}
-                  </td>
+      <Card className="mt-6">
+        <CardHeader
+          title="Files read"
+          description={`${imported.length} recognised · ${skipped.length} skipped`}
+        />
+        {record.files.length === 0 ? (
+          <p className="px-5 py-8 text-center text-secondary text-ink-3">No file records for this import.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table-base">
+              <thead>
+                <tr>
+                  <th scope="col">File</th>
+                  <th scope="col">Dataset</th>
+                  <th scope="col">Result</th>
+                  <th scope="col" className="hidden text-right sm:table-cell">
+                    Rows
+                  </th>
+                  <th scope="col" className="hidden text-right sm:table-cell">
+                    Imported
+                  </th>
+                  <th scope="col" className="hidden text-right md:table-cell">
+                    Rejected
+                  </th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {[...imported, ...skipped].map((file) => (
+                  <tr key={`${file.filename}-${file.dataset ?? "none"}`}>
+                    <td className="max-w-xs truncate text-ink" title={file.filename}>
+                      {file.filename}
+                      {file.fileSize > 0 && (
+                        <span className="ml-2 text-caption text-ink-3">{formatBytes(file.fileSize)}</span>
+                      )}
+                    </td>
+                    <td className="text-ink-2">{file.dataset ?? "—"}</td>
+                    <td>
+                      <Badge tone={FILE_STATUS_TONE[file.status]}>{FILE_STATUS_LABEL[file.status]}</Badge>
+                      {file.reason && <p className="mt-1 max-w-xs text-caption text-ink-3">{file.reason}</p>}
+                      {file.errors.length > 0 && (
+                        <p className="mt-1 max-w-xs text-caption text-danger">{file.errors[0]}</p>
+                      )}
+                      {file.warnings.length > 0 && (
+                        <p className="mt-1 max-w-xs text-caption text-warning">{file.warnings[0]}</p>
+                      )}
+                    </td>
+                    <td className="hidden text-right tabular-nums text-ink-2 sm:table-cell">
+                      {formatNumber(file.recordsDiscovered)}
+                    </td>
+                    <td className="hidden text-right tabular-nums text-ink sm:table-cell">
+                      {formatNumber(file.recordsImported)}
+                    </td>
+                    <td className="hidden text-right tabular-nums text-ink-2 md:table-cell">
+                      {formatNumber(file.recordsRejected)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
-      <p className="text-xs text-gray-400">
-        Raw uploaded files are deleted after successful processing. Only normalized data is
-        retained. You can delete this import at any time from the imports list.
-      </p>
+      {record.status === "completed" && record.recordsImported > 0 && (
+        <div className="mt-6 flex flex-wrap gap-2">
+          <LinkButton href="/" variant="primary">
+            Open dashboard
+          </LinkButton>
+          <LinkButton href="/people" variant="secondary">
+            Browse people
+          </LinkButton>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Delete this import?"
+        description={
+          <>
+            <p>The import record and its file breakdown will be removed.</p>
+            <label className="mt-3 flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 accent-danger"
+                checked={confirmDelete === "withData"}
+                onChange={(e) => setConfirmDelete(e.target.checked ? "withData" : "record")}
+              />
+              <span>
+                Also delete the people this import introduced. People who also appear in another import are
+                kept.
+              </span>
+            </label>
+          </>
+        }
+        confirmLabel="Delete import"
+        busy={remove.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => remove.mutate(confirmDelete === "withData")}
+      />
+
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>
   );
 }

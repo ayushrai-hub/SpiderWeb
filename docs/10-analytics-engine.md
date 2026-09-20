@@ -11,6 +11,7 @@
 ## Analytics Services
 
 ### Network Overview
+
 ```typescript
 getNetworkOverview(workspaceId, timeRange?) → {
   totalConnections: number
@@ -23,6 +24,7 @@ getNetworkOverview(workspaceId, timeRange?) → {
 ```
 
 ### Communication Metrics
+
 ```typescript
 getCommunicationMetrics(workspaceId, timeRange?) → {
   totalConversations: number
@@ -38,6 +40,7 @@ getCommunicationMetrics(workspaceId, timeRange?) → {
 ```
 
 ### Outbound Metrics
+
 ```typescript
 getOutboundMetrics(workspaceId, timeRange?) → {
   outreachCount: number
@@ -54,6 +57,7 @@ getOutboundMetrics(workspaceId, timeRange?) → {
 ```
 
 ### Career Metrics
+
 ```typescript
 getCareerMetrics(workspaceId, timeRange?) → {
   applications: number
@@ -64,6 +68,7 @@ getCareerMetrics(workspaceId, timeRange?) → {
 ```
 
 ### Relationship Metrics
+
 ```typescript
 getRelationshipMetrics(workspaceId) → {
   activeRelationships: RelationshipSummary

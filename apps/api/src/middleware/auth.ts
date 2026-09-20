@@ -1,5 +1,5 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { getSupabase, type AuthUser } from '@intel/shared';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { query, type AuthUser, type WorkspaceRole, isWorkspaceRole } from '@intel/shared';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -7,75 +7,91 @@ declare module 'fastify' {
   }
 }
 
-export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const authHeader = request.headers.authorization;
+/**
+ * Identity.
+ *
+ * Sign-in is out of scope for this build, so the API runs as a single local
+ * operator whose user and workspace are seeded on first request. Everything
+ * downstream still goes through `request.user.workspaceId`, and every query is
+ * scoped by it, so swapping this function for a real token verifier is the
+ * only change needed to become multi-tenant.
+ *
+ * Deliberately NOT supported: a client-supplied workspace header. Trusting one
+ * would let any caller read another workspace's imported data.
+ */
+const LOCAL_USER = {
+  id: '00000000-0000-4000-8000-000000000001',
+  email: 'you@localhost',
+  name: 'You',
+} as const;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Missing or invalid authorization header',
-      },
-    });
-  }
+let seeding: Promise<AuthUser> | null = null;
 
-  const token = authHeader.slice(7);
+async function seedLocalIdentity(): Promise<AuthUser> {
+  await query(
+    `INSERT INTO users (id, email, name) VALUES ($1, $2, $3)
+     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
+    [LOCAL_USER.id, LOCAL_USER.email, LOCAL_USER.name]
+  );
 
-  try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase.auth.getUser(token);
-
-    if (error || !data.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Invalid or expired token',
-        },
-      });
-    }
-
-    // Extract workspace_id from JWT metadata or query
-    const workspaceId = request.headers['x-workspace-id'] as string;
-
-    if (!workspaceId) {
-      return reply.status(400).send({
-        error: {
-          code: 'WORKSPACE_REQUIRED',
-          message: 'X-Workspace-Id header is required',
-        },
-      });
-    }
-
-    // Verify workspace membership
-    const { data: membership, error: membershipError } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('user_id', data.user.id)
-      .eq('workspace_id', workspaceId)
-      .single();
-
-    if (membershipError || !membership) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: 'Not a member of this workspace',
-        },
-      });
-    }
-
-    request.user = {
-      id: data.user.id,
-      email: data.user.email || '',
-      workspaceId,
-      workspaceRole: membership.role,
+  const existing = await query<{ workspace_id: string; role: string }>(
+    `SELECT workspace_id, role FROM workspace_members WHERE user_id = $1 ORDER BY created_at LIMIT 1`,
+    [LOCAL_USER.id]
+  );
+  if (existing.length > 0) {
+    return {
+      ...LOCAL_USER,
+      workspaceId: existing[0].workspace_id,
+      workspaceRole: isWorkspaceRole(existing[0].role) ? existing[0].role : 'member',
     };
+  }
+
+  const [workspace] = await query<{ id: string }>(
+    `INSERT INTO workspaces (name, slug, owner_id) VALUES ('My network', $1, $2) RETURNING id`,
+    [`ws-${LOCAL_USER.id.slice(0, 8)}`, LOCAL_USER.id]
+  );
+  await query(
+    `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')
+     ON CONFLICT (workspace_id, user_id) DO NOTHING`,
+    [workspace.id, LOCAL_USER.id]
+  );
+  return { ...LOCAL_USER, workspaceId: workspace.id, workspaceRole: 'owner' };
+}
+
+export async function resolveIdentity(): Promise<AuthUser> {
+  if (!seeding) {
+    seeding = seedLocalIdentity().catch((err) => {
+      seeding = null;
+      throw err;
+    });
+  }
+  return seeding;
+}
+
+export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  try {
+    request.user = await resolveIdentity();
   } catch (err) {
-    request.log.error(err, 'Auth middleware error');
-    return reply.status(500).send({
+    request.log.error({ err }, 'Could not resolve the local workspace');
+    return reply.status(503).send({
       error: {
-        code: 'AUTH_ERROR',
-        message: 'Authentication service error',
+        code: 'WORKSPACE_UNAVAILABLE',
+        message:
+          'The database is not reachable. Check that Postgres is running and migrations have been applied.',
       },
     });
   }
+}
+
+export function requireRole(...roles: WorkspaceRole[]) {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (!request.user) {
+      return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Sign in required.' } });
+    }
+    if (!roles.includes(request.user.workspaceRole)) {
+      return reply.status(403).send({
+        error: { code: 'FORBIDDEN', message: `This action requires one of: ${roles.join(', ')}.` },
+      });
+    }
+  };
 }

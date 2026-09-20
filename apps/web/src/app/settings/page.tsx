@@ -1,158 +1,233 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import Link from "next/link";
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { formatDate, formatNumber, relativeTime } from "@/lib/format";
+import {
+  Alert,
+  Button,
+  Card,
+  CardHeader,
+  ConfirmDialog,
+  DetailList,
+  ErrorState,
+  PageHeader,
+  SkeletonCard,
+  Toast,
+} from "@/components/ui";
 
-export default function Settings() {
+export default function SettingsPage() {
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState("openai");
-  const [apiKey, setApiKey] = useState("");
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const { data: credentials, isLoading } = useQuery({
-    queryKey: ["credentials"],
-    queryFn: () => api.getCredentials(),
-  });
+  const meQuery = useQuery({ queryKey: ["me"], queryFn: () => api.me() });
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: () => api.dashboard() });
 
-  const addMutation = useMutation({
-    mutationFn: () => api.addCredential(provider, apiKey),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["credentials"] });
-      setApiKey("");
+  const refresh = useMutation({
+    mutationFn: () => api.refreshAnalytics(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      setToast("Derived analytics recalculated.");
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteCredential(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["credentials"] });
+  const reset = useMutation({
+    mutationFn: () => api.resetNetwork(),
+    onSuccess: async (result) => {
+      setConfirmReset(false);
+      await queryClient.invalidateQueries();
+      setToast(`Deleted ${formatNumber(result.data.deletedPeople)} people and everything derived from them.`);
     },
   });
 
-  const testMutation = useMutation({
-    mutationFn: (id: string) => api.testCredential(id),
-  });
+  const me = meQuery.data?.data;
+  const dashboard = dashboardQuery.data?.data;
 
-  const creds = credentials?.data || [];
+  if (meQuery.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Settings" />
+        <SkeletonCard className="h-48" />
+      </div>
+    );
+  }
+
+  if (meQuery.error) {
+    return (
+      <div>
+        <PageHeader title="Settings" />
+        <ErrorState
+          message={meQuery.error instanceof Error ? meQuery.error.message : undefined}
+          onRetry={() => meQuery.refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
-      
-      <div className="max-w-2xl">
-        {/* AI Providers */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-          <h2 className="text-lg font-semibold mb-4">AI Providers</h2>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Add Provider Key</label>
-            <div className="flex gap-2">
-              <select
-                value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-              >
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="google">Google</option>
-                <option value="openrouter">OpenRouter</option>
-              </select>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="API Key"
-                className="flex-1 border rounded-lg px-3 py-2"
+      <PageHeader title="Settings" subtitle="Your workspace, your data, and what happens to it" />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Account" />
+          <div className="card-pad">
+            <DetailList
+              items={[
+                { label: "Signed in as", value: me?.user.name ?? me?.user.email ?? "—" },
+                { label: "Email", value: me?.user.email ?? "—" },
+                { label: "Workspace", value: me?.workspace.name ?? "—" },
+                { label: "Role", value: me?.workspace.role ?? "—" },
+                {
+                  label: "Created",
+                  value: me?.workspace.createdAt ? formatDate(me.workspace.createdAt) : "—",
+                },
+              ]}
+            />
+            <Alert variant="info" className="mt-5">
+              This build runs as a single local operator — there is no sign-in yet. Every query is still
+              scoped to the workspace above, so adding real authentication is a change in one place.
+            </Alert>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Your imported profile" description="From Profile.csv in your LinkedIn archive" />
+          <div className="card-pad">
+            {dashboard?.self ? (
+              <DetailList
+                items={[
+                  { label: "Name", value: dashboard.self.name },
+                  { label: "Headline", value: dashboard.self.headline ?? "Not in export" },
+                  { label: "Location", value: dashboard.self.location ?? "Not in export" },
+                  { label: "Industry", value: dashboard.self.industry ?? "Not in export" },
+                ]}
               />
-              <button
-                onClick={() => addMutation.mutate()}
-                disabled={!apiKey || addMutation.isPending}
-                className="bg-blue-500 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-              >
-                {addMutation.isPending ? "Adding..." : "Add"}
-              </button>
-            </div>
-            {addMutation.isError && (
-              <p className="text-red-500 text-sm mt-1">{addMutation.error.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            {isLoading ? (
-              <p className="text-gray-500">Loading...</p>
-            ) : creds.length === 0 ? (
-              <p className="text-gray-500">No API keys configured</p>
             ) : (
-              creds.map((cred: any) => (
-                <div key={cred.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <div className="font-medium">{cred.provider}</div>
-                    <div className="text-sm text-gray-500">
-                      ••••••••••{cred.keyFingerprint}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      Status: {cred.status}
-                      {cred.lastUsedAt && ` • Last used: ${new Date(cred.lastUsedAt).toLocaleDateString()}`}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => testMutation.mutate(cred.id)}
-                      disabled={testMutation.isPending}
-                      className="text-sm text-blue-500 hover:text-blue-700"
-                    >
-                      Test
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(cred.id)}
-                      disabled={deleteMutation.isPending}
-                      className="text-sm text-red-500 hover:text-red-700"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))
+              <p className="text-secondary text-ink-2">
+                Your archive did not include Profile.csv, so SpiderWeb does not know who you are.
+                Shared-employer and shared-school signals need it.
+              </p>
             )}
           </div>
-        </div>
-
-        {/* Model Settings */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-          <h2 className="text-lg font-semibold mb-4">Model Settings</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Default Provider</label>
-              <select className="mt-1 block w-full border rounded-lg px-3 py-2">
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Default Model</label>
-              <select className="mt-1 block w-full border rounded-lg px-3 py-2">
-                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
-                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Data Management */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Data Management</h2>
-          <div className="space-y-4">
-            <button className="bg-gray-500 text-white px-4 py-2 rounded-lg">
-              Export Data
-            </button>
-            <button className="bg-red-500 text-white px-4 py-2 rounded-lg">
-              Delete All Data
-            </button>
-          </div>
-        </div>
+        </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader title="Your data" description="Everything SpiderWeb has stored for this workspace" />
+        <div className="card-pad">
+          <DetailList
+            items={[
+              { label: "Connections", value: formatNumber(dashboard?.totals.connections ?? 0) },
+              { label: "Companies", value: formatNumber(dashboard?.totals.companies ?? 0) },
+              { label: "Conversations", value: formatNumber(dashboard?.totals.conversations ?? 0) },
+              { label: "Messages", value: formatNumber(dashboard?.totals.messages ?? 0) },
+              { label: "Imports", value: formatNumber(dashboard?.totals.imports ?? 0) },
+              {
+                label: "Last import",
+                value: dashboard?.lastImportAt ? relativeTime(dashboard.lastImportAt) : "None yet",
+              },
+            ]}
+          />
+          <div className="mt-5 flex flex-wrap gap-2">
+            <a
+              href={api.exportUrl("connections.csv")}
+              className="inline-flex h-9 items-center rounded-md border border-line-strong bg-surface px-4 text-body font-medium text-ink hover:bg-raised focus-ring"
+            >
+              Download connections (CSV)
+            </a>
+            <a
+              href={api.exportUrl("companies.csv")}
+              className="inline-flex h-9 items-center rounded-md border border-line-strong bg-surface px-4 text-body font-medium text-ink hover:bg-raised focus-ring"
+            >
+              Download companies (CSV)
+            </a>
+            <a
+              href={api.exportUrl("network.json")}
+              className="inline-flex h-9 items-center rounded-md border border-line-strong bg-surface px-4 text-body font-medium text-ink hover:bg-raised focus-ring"
+            >
+              Download analytics (JSON)
+            </a>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader
+          title="Maintenance"
+          description="Recalculate everything derived from your imports without re-uploading"
+        />
+        <div className="card-pad">
+          <p className="text-secondary text-ink-2">
+            Company counts, current roles, career moves and interaction recency are recomputed after every
+            import. Run this if you have edited data directly or suspect a figure is stale.
+          </p>
+          <Button
+            className="mt-4"
+            variant="secondary"
+            loading={refresh.isPending}
+            onClick={() => refresh.mutate()}
+          >
+            Recalculate analytics
+          </Button>
+          {refresh.isError && (
+            <Alert variant="danger" className="mt-3">
+              {(refresh.error as Error).message}
+            </Alert>
+          )}
+        </div>
+      </Card>
+
+      <Card className="mt-6 border-danger/30">
+        <CardHeader title="Danger zone" description="These actions cannot be undone" />
+        <div className="card-pad">
+          <p className="text-secondary text-ink-2">
+            Deleting your network removes every person, company, role, message and import record in this
+            workspace, including the notes and tags you wrote. Export your data first if you want to keep a
+            copy.
+          </p>
+          <Button variant="danger" className="mt-4" onClick={() => setConfirmReset(true)}>
+            Delete all imported data
+          </Button>
+          {reset.isError && (
+            <Alert variant="danger" className="mt-3">
+              {(reset.error as Error).message}
+            </Alert>
+          )}
+        </div>
+      </Card>
+
+      <p className="mt-6 text-caption text-ink-3">
+        Looking for per-import deletion?{" "}
+        <Link href="/imports" className="text-accent hover:underline">
+          Open Imports
+        </Link>{" "}
+        and choose an individual import.
+      </p>
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Delete all imported data?"
+        description={
+          <>
+            <p>
+              This permanently removes {formatNumber(dashboard?.totals.connections ?? 0)} people, their
+              companies and roles, every message, and the notes and tags you have written.
+            </p>
+            <p className="mt-2">There is no undo.</p>
+          </>
+        }
+        confirmLabel="Delete everything"
+        requireText="DELETE"
+        busy={reset.isPending}
+        onCancel={() => setConfirmReset(false)}
+        onConfirm={() => reset.mutate()}
+      />
+
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>
   );
 }

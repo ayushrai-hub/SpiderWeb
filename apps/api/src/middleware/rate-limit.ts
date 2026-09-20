@@ -1,75 +1,79 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { getRedis } from '@intel/shared';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { tryGetRedis } from '@intel/shared';
 
-interface RateLimitConfig {
-  windowMs: number;
-  maxRequests: number;
-  keyGenerator?: (request: FastifyRequest) => string;
+interface Bucket {
+  count: number;
+  resetAt: number;
 }
 
-const defaultKeyGenerator = (request: FastifyRequest): string => {
-  const userId = (request as any).user?.id || 'anonymous';
-  const ip = request.ip || request.socket.remoteAddress || 'unknown';
-  return `ratelimit:${userId}:${ip}`;
-};
+/**
+ * Sliding-window rate limiting.
+ *
+ * Uses Redis when it is configured so limits hold across API instances, and an
+ * in-process counter otherwise — a single-instance deployment should still be
+ * protected rather than silently unlimited, which is what the previous
+ * implementation did whenever Redis was absent.
+ */
+const memory = new Map<string, Bucket>();
 
-export function createRateLimit(config: RateLimitConfig) {
-  const { windowMs, maxRequests, keyGenerator = defaultKeyGenerator } = config;
+function memoryHit(key: string, windowMs: number): number {
+  const now = Date.now();
+  const bucket = memory.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    memory.set(key, { count: 1, resetAt: now + windowMs });
+    if (memory.size > 10_000) {
+      for (const [k, b] of memory) if (b.resetAt <= now) memory.delete(k);
+    }
+    return 1;
+  }
+  bucket.count += 1;
+  return bucket.count;
+}
 
+export interface RateLimitOptions {
+  windowMs: number;
+  max: number;
+  name: string;
+}
+
+export function rateLimit({ windowMs, max, name }: RateLimitOptions) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    try {
-      const redis = getRedis();
-      const key = keyGenerator(request);
-      const now = Date.now();
-      const windowStart = now - windowMs;
+    const identity = request.user?.id ?? request.ip ?? 'anonymous';
+    const key = `ratelimit:${name}:${identity}`;
+    let count: number;
 
-      // Use Redis sorted set for sliding window
-      const pipeline = redis.pipeline();
-      pipeline.zremrangebyscore(key, 0, windowStart);
-      pipeline.zadd(key, now, `${now}`);
-      pipeline.zcard(key);
-      pipeline.expire(key, Math.ceil(windowMs / 1000));
-
-      const results = await pipeline.exec();
-      const requestCount = (results?.[2]?.[1] as number) || 0;
-
-      // Set rate limit headers
-      reply.header('X-RateLimit-Limit', maxRequests);
-      reply.header('X-RateLimit-Remaining', Math.max(0, maxRequests - requestCount));
-      reply.header('X-RateLimit-Reset', Math.ceil((now + windowMs) / 1000));
-
-      if (requestCount > maxRequests) {
-        return reply.status(429).send({
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: 'Too many requests. Please try again later.',
-          },
-        });
+    const redis = tryGetRedis();
+    if (redis) {
+      try {
+        const results = await redis.multi().incr(key).pexpire(key, windowMs, 'NX').exec();
+        count = Number(results?.[0]?.[1] ?? 0) || memoryHit(key, windowMs);
+      } catch (err) {
+        request.log.warn({ err }, 'Rate limiter fell back to in-process counting');
+        count = memoryHit(key, windowMs);
       }
-    } catch (err) {
-      // If Redis fails, allow request through
-      console.error('Rate limit error:', err);
+    } else {
+      count = memoryHit(key, windowMs);
+    }
+
+    reply.header('X-RateLimit-Limit', max);
+    reply.header('X-RateLimit-Remaining', Math.max(0, max - count));
+
+    if (count > max) {
+      return reply.status(429).send({
+        error: {
+          code: 'RATE_LIMITED',
+          message: `Too many requests. Try again in ${Math.ceil(windowMs / 1000)} seconds.`,
+        },
+      });
     }
   };
 }
 
-// Pre-configured rate limiters
-export const apiRateLimit = createRateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 100,
-});
-
-export const authRateLimit = createRateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 10,
-});
-
-export const aiRateLimit = createRateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 20,
-});
-
-export const uploadRateLimit = createRateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  maxRequests: 10,
-});
+export const apiRateLimit = rateLimit({ windowMs: 60_000, max: 600, name: 'api' });
+/**
+ * Uploads are the expensive path. A ten-minute window bounds abuse while still
+ * recovering quickly enough that a legitimate user importing several CSVs in a
+ * row — or a CI run — is not locked out for an hour.
+ */
+export const uploadRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 20, name: 'upload' });
+export const writeRateLimit = rateLimit({ windowMs: 60_000, max: 120, name: 'write' });

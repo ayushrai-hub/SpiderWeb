@@ -7,6 +7,7 @@
 **Data:** LinkedIn export with connections, messages, job applications, saved jobs.
 
 **Needs:**
+
 - Who in my network works at target companies?
 - Which connections are dormant and worth reactivating?
 - What's my outreach response rate?
@@ -23,6 +24,7 @@
 **Data:** LinkedIn export plus CRM data (future).
 
 **Needs:**
+
 - Relationship strength across contacts
 - Communication patterns and response rates
 - Company engagement history
@@ -39,6 +41,7 @@
 **Data:** LinkedIn export plus job postings.
 
 **Needs:**
+
 - Network mapping by skill, company, role
 - Communication history with candidates
 - Relationship progression tracking
@@ -55,6 +58,7 @@
 **Data:** LinkedIn export (multiple users aggregated with consent).
 
 **Needs:**
+
 - Network analytics across dimensions
 - Industry/company/role distribution
 - Communication pattern analysis

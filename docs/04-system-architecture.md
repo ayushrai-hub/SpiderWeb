@@ -3,6 +3,7 @@
 ## Tech Stack Decision
 
 ### Frontend
+
 - **Next.js 14+** (App Router) — SSR, API routes, file-based routing
 - **TypeScript** — end-to-end type safety
 - **Tailwind CSS** — utility-first styling
@@ -11,31 +12,38 @@
 - **shadcn/ui** — component library (copy-paste, not dependency-locked)
 
 ### Backend
+
 - **Node.js + Fastify** — high-performance HTTP, good plugin system
 - **TypeScript** — shared types with frontend
 - **Drizzle ORM** — type-safe SQL, migration-friendly, thin abstraction
 
 ### Database
+
 - **PostgreSQL 16** — relational + JSONB + full-text search
 - **pgvector** — vector embeddings for semantic search
 - **Drizzle Migrations** — schema versioning
 
 ### Object Storage
+
 - **MinIO** (dev) / **S3** (prod) — raw file preservation
 
 ### Background Jobs
+
 - **BullMQ** on **Redis** — job queues, retries, rate limiting
 
 ### Authentication
+
 - **Supabase Auth** — production-grade auth, JWT, row-level security support
 
 ### Deployment
+
 - **Vercel** — Next.js frontend
 - **Railway / Fly.io / AWS ECS** — Fastify API + workers
 - **Neon / Supabase** — managed PostgreSQL
 - **Upstash / Redis Cloud** — managed Redis
 
 ### Why This Stack
+
 - TypeScript everywhere = shared types, one language
 - Fastify > NestJS: less boilerplate, better raw performance
 - Drizzle > Prisma: thinner, SQL-close, better migration control

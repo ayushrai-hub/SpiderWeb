@@ -7,23 +7,27 @@ User owns all data in their workspace. Platform is processor, not owner.
 ## Data Lifecycle
 
 ### Collection
+
 - User uploads data voluntarily
 - System processes and stores
 - Provenance recorded on every fact
 
 ### Storage
+
 - Raw files: immutable in S3
 - Canonical data: PostgreSQL with soft deletes
 - Embeddings: pgvector
 - Backups: encrypted, tenant-scoped
 
 ### Retention
+
 - User-controlled retention periods
 - Default: indefinite until user deletes
 - Audit logs: 1 year minimum
 - Deleted data: 30-day soft delete, then permanent
 
 ### Deletion
+
 - Import deletion: removes normalized data, preserves raw files for 30 days
 - Workspace deletion: removes all data including raw files after 30-day grace
 - User account deletion: removes all workspaces and data
@@ -32,6 +36,7 @@ User owns all data in their workspace. Platform is processor, not owner.
 ## Data Export
 
 Users can export:
+
 - All canonical data as CSV/JSON
 - Raw uploaded files
 - AI conversation history
@@ -41,6 +46,7 @@ Users can export:
 ## Audit Logging
 
 All mutations logged:
+
 - user_id
 - workspace_id
 - action (create/update/delete)
@@ -54,6 +60,7 @@ Audit logs immutable. Never deleted.
 ## Sensitive Data
 
 ### Protected Fields
+
 - Email addresses
 - Phone numbers
 - Message content
@@ -61,6 +68,7 @@ Audit logs immutable. Never deleted.
 - Access tokens
 
 ### Access Controls
+
 - Only owner/admin can view member list
 - Message content only visible to conversation participants
 - No sensitive data in API logs

@@ -38,21 +38,21 @@ app/
 
 ## Navigation
 
-| Route | Label | Icon |
-|-------|-------|------|
-| / | Dashboard | Home |
-| /network | Network | Graph |
-| /people | People | Users |
-| /companies | Companies | Building |
-| /messages | Messages | Mail |
-| /outreach | Outreach | Send |
-| /jobs | Jobs | Briefcase |
-| /activities | Activities | Activity |
-| /insights | Insights | Lightbulb |
-| /assistant | AI Assistant | Bot |
-| /research | Research | Search |
-| /imports | Imports | Upload |
-| /settings | Settings | Settings |
+| Route       | Label        | Icon      |
+| ----------- | ------------ | --------- |
+| /           | Dashboard    | Home      |
+| /network    | Network      | Graph     |
+| /people     | People       | Users     |
+| /companies  | Companies    | Building  |
+| /messages   | Messages     | Mail      |
+| /outreach   | Outreach     | Send      |
+| /jobs       | Jobs         | Briefcase |
+| /activities | Activities   | Activity  |
+| /insights   | Insights     | Lightbulb |
+| /assistant  | AI Assistant | Bot       |
+| /research   | Research     | Search    |
+| /imports    | Imports      | Upload    |
+| /settings   | Settings     | Settings  |
 
 ## State Management
 
@@ -64,22 +64,26 @@ app/
 ## Key Components
 
 ### Data Tables
+
 - TanStack Table for sortable, filterable lists
 - Server-side pagination for large datasets
 - Column-level search and filter
 
 ### Charts
+
 - Recharts for network, communication, career metrics
 - Responsive containers
 - Tooltip with details
 
 ### AI Chat
+
 - ChatGPT-like interface
 - Message list with user/assistant/tool messages
 - Evidence cards inline
 - Loading states for tool execution
 
 ### Import Flow
+
 - Multi-step wizard
 - Drag-and-drop upload
 - Real-time processing progress (polling)
@@ -88,6 +92,7 @@ app/
 ## Loading/Error/Empty States
 
 Every page must handle:
+
 - **Loading:** Skeleton screens, not spinners
 - **Error:** Retry button, error message, contact support link
 - **Empty:** Illustration, explanation, CTA to upload data

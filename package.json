@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@10.14.0",
   "scripts": {
-    "dev": "pnpm --filter @intel/api dev & pnpm --filter @intel/web dev",
+    "dev": "pnpm run --parallel --filter \"@intel/api\" --filter \"@intel/web\" dev",
     "build": "pnpm -r build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,20 +17,24 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @intel/database migrate",
-    "db:generate": "pnpm --filter @intel/database generate",
-    "db:seed": "pnpm --filter @intel/database seed",
     "prepare": "husky",
-    "test:e2e": "playwright test --config tests/e2e/playwright.config.ts"
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.ts",
+    "dev:worker": "pnpm --filter @intel/ingestion-worker dev",
+    "test:integration": "vitest run tests/integration"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "csv-parse": "^5.5.0",
+    "esbuild": "^0.24.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-import": "^2.32.0",
+    "fflate": "^0.8.3",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.2",
+    "postgres": "^3.4.0",
     "prettier": "^3.9.7",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.70.0",
@@ -43,6 +47,11 @@
     ],
     "*.{json,md,yml,yaml}": [
       "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
     ]
   }
 }

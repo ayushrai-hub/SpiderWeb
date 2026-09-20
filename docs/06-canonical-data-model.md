@@ -39,6 +39,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 ## Table Definitions (Summary)
 
 ### users
+
 - id (UUID PK)
 - email (unique)
 - name
@@ -47,6 +48,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - updated_at
 
 ### workspaces
+
 - id (UUID PK)
 - name
 - slug
@@ -55,6 +57,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - updated_at
 
 ### workspace_members
+
 - id (UUID PK)
 - workspace_id (FK)
 - user_id (FK)
@@ -62,6 +65,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - created_at
 
 ### data_sources
+
 - id (UUID PK)
 - workspace_id (FK)
 - source_type (linkedin/gmail/outlook/github/crm/csv/json)
@@ -69,6 +73,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - created_at
 
 ### imports
+
 - id (UUID PK)
 - workspace_id (FK)
 - data_source_id (FK)
@@ -86,6 +91,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - checksum
 
 ### import_files
+
 - id (UUID PK)
 - import_id (FK)
 - filename
@@ -99,6 +105,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - errors (JSONB)
 
 ### people
+
 - id (UUID PK)
 - workspace_id (FK)
 - canonical_name
@@ -114,6 +121,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - updated_at
 
 ### person_identifiers
+
 - id (UUID PK)
 - person_id (FK)
 - identifier_type (email/linkedin_url/external_id/company_name)
@@ -122,6 +130,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - confidence
 
 ### person_profiles
+
 - id (UUID PK)
 - person_id (FK)
 - field_name
@@ -130,6 +139,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - observed_at
 
 ### person_employment
+
 - id (UUID PK)
 - person_id (FK)
 - company_id (FK nullable)
@@ -143,6 +153,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - observed_at
 
 ### companies
+
 - id (UUID PK)
 - workspace_id (FK)
 - canonical_name
@@ -158,6 +169,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - updated_at
 
 ### company_identifiers
+
 - id (UUID PK)
 - company_id (FK)
 - identifier_type (domain/linkedin_url/external_id)
@@ -165,6 +177,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_type
 
 ### connections
+
 - id (UUID PK)
 - workspace_id (FK)
 - person_id (FK → people)
@@ -173,6 +186,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - status (connected/invited/pending)
 
 ### connection_events
+
 - id (UUID PK)
 - connection_id (FK)
 - event_type (sent/accepted/declared)
@@ -180,6 +194,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_file
 
 ### conversations
+
 - id (UUID PK)
 - workspace_id (FK)
 - title
@@ -189,12 +204,14 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_type
 
 ### conversation_participants
+
 - id (UUID PK)
 - conversation_id (FK)
 - person_id (FK)
 - joined_at
 
 ### messages
+
 - id (UUID PK)
 - workspace_id (FK)
 - conversation_id (FK)
@@ -206,6 +223,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - has_attachments
 
 ### message_attachments
+
 - id (UUID PK)
 - message_id (FK)
 - filename
@@ -213,6 +231,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - s3_key
 
 ### activities
+
 - id (UUID PK)
 - workspace_id (FK)
 - person_id (FK nullable)
@@ -223,6 +242,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_file
 
 ### jobs
+
 - id (UUID PK)
 - workspace_id (FK)
 - company_id (FK nullable)
@@ -235,6 +255,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - created_at
 
 ### job_applications
+
 - id (UUID PK)
 - workspace_id (FK)
 - job_id (FK)
@@ -243,6 +264,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_file
 
 ### saved_jobs
+
 - id (UUID PK)
 - workspace_id (FK)
 - job_id (FK)
@@ -250,6 +272,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_file
 
 ### skills
+
 - id (UUID PK)
 - person_id (FK)
 - name
@@ -257,6 +280,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_file
 
 ### education
+
 - id (UUID PK)
 - person_id (FK)
 - school_name
@@ -267,6 +291,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - source_file
 
 ### embeddings
+
 - id (UUID PK)
 - workspace_id (FK)
 - entity_type (person/message/document)
@@ -276,6 +301,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - created_at
 
 ### insights
+
 - id (UUID PK)
 - workspace_id (FK)
 - type
@@ -287,6 +313,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - generated_at
 
 ### agent_conversations
+
 - id (UUID PK)
 - workspace_id (FK)
 - user_id (FK)
@@ -295,6 +322,7 @@ User ── Workspace ── DataSource ── Import ── ImportFile
 - updated_at
 
 ### agent_messages
+
 - id (UUID PK)
 - conversation_id (FK)
 - role (user/assistant/tool)

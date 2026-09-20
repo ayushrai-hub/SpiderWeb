@@ -1,6 +1,7 @@
 # Implementation Roadmap
 
 ## Phase 0: Architecture + Documentation ✅
+
 - [x] Product vision
 - [x] PRD
 - [x] User personas
@@ -24,6 +25,7 @@
 - [x] Implementation roadmap
 
 ## Phase 1: Repository + Infrastructure ✅
+
 - [x] pnpm monorepo init
 - [x] Package.json for each package
 - [x] TypeScript configs
@@ -45,6 +47,7 @@
 - Duration: 1-2 days
 
 ## Phase 2: Authentication + Workspace ✅
+
 - [x] Supabase client configuration
 - [x] Auth middleware (JWT validation + workspace scoping)
 - [x] Auth routes (signup, login, logout, verify, reset, refresh)
@@ -56,6 +59,7 @@
 - [x] All tests pass, lint passes, typecheck passes, build succeeds
 
 ## Phase 3: Database + Canonical Schema ✅
+
 - [x] Drizzle ORM setup
 - [x] Schema definition (all tables)
 - [x] Migration generation (0000_glamorous_texas_twister.sql)
@@ -67,6 +71,7 @@
 - Duration: 3-5 days
 
 ## Phase 4: File Upload + Import System
+
 - [ ] S3/MinIO client setup
 - [ ] Upload endpoint (multipart)
 - [ ] File validation (type, size)
@@ -77,6 +82,7 @@
 - Duration: 3-5 days
 
 ## Phase 5: LinkedIn Parser
+
 - [ ] LinkedInExportAdapter class
 - [ ] File recognition (52+ file types)
 - [ ] CSV parser with tolerance
@@ -88,6 +94,7 @@
 - Duration: 5-7 days
 
 ## Phase 6: Normalization + Entity Resolution
+
 - [ ] LinkedIn → canonical mapping
 - [ ] Person entity resolution
 - [ ] Company entity resolution
@@ -98,6 +105,7 @@
 - Duration: 5-7 days
 
 ## Phase 7: Knowledge Graph
+
 - [ ] Graph edge creation from normalized data
 - [ ] Temporal relationships
 - [ ] Graph query utilities
@@ -106,6 +114,7 @@
 - Duration: 3-5 days
 
 ## Phase 8: Analytics
+
 - [ ] Analytics service package
 - [ ] Network overview metrics
 - [ ] Communication metrics
@@ -115,6 +124,7 @@
 - Duration: 3-5 days
 
 ## Phase 9: Dashboard
+
 - [ ] Layout + navigation
 - [ ] Dashboard home page
 - [ ] People list (search, filter, sort)
@@ -125,6 +135,7 @@
 - Duration: 5-7 days
 
 ## Phase 10: Semantic Indexing
+
 - [ ] pgvector setup
 - [ ] Embedding generation (OpenAI)
 - [ ] Document chunking
@@ -133,6 +144,7 @@
 - Duration: 2-3 days
 
 ## Phase 11: AI Chat
+
 - [ ] Chat UI (ChatGPT-like)
 - [ ] Tool definitions (search_people, etc.)
 - [ ] Tool execution engine
@@ -147,15 +159,15 @@
 ## Dependencies
 
 | Phase | Depends On |
-|-------|-----------|
-| 1 | 0 |
-| 2 | 1 |
-| 3 | 1 |
-| 4 | 2, 3 |
-| 5 | 4 |
-| 6 | 5 |
-| 7 | 6 |
-| 8 | 7 |
-| 9 | 8 |
-| 10 | 3 |
-| 11 | 9, 10 |
+| ----- | ---------- |
+| 1     | 0          |
+| 2     | 1          |
+| 3     | 1          |
+| 4     | 2, 3       |
+| 5     | 4          |
+| 6     | 5          |
+| 7     | 6          |
+| 8     | 7          |
+| 9     | 8          |
+| 10    | 3          |
+| 11    | 9, 10      |

@@ -28,23 +28,23 @@ RESPONSE (answer + evidence + provenance)
 
 ## Available Tools
 
-| Tool | Purpose | Data Source |
-|------|---------|------------|
-| search_people | Find people by criteria | SQL |
-| search_companies | Find companies by criteria | SQL |
-| search_messages | Search message content | Full-text + vector |
-| search_conversations | Find conversations | SQL |
-| search_jobs | Find jobs by criteria | SQL |
-| search_connections | Find connections | SQL |
-| search_activities | Find activities | SQL |
-| query_analytics | Get computed metrics | Analytics cache |
-| query_graph | Traverse relationships | Graph queries |
-| semantic_search | Find by meaning | pgvector |
-| get_person | Get person details | SQL |
-| get_company | Get company details | SQL |
-| get_conversation | Get conversation + messages | SQL |
-| get_insights | Get generated insights | SQL |
-| run_web_research | Research person/company (post-MVP) | External APIs |
+| Tool                 | Purpose                            | Data Source        |
+| -------------------- | ---------------------------------- | ------------------ |
+| search_people        | Find people by criteria            | SQL                |
+| search_companies     | Find companies by criteria         | SQL                |
+| search_messages      | Search message content             | Full-text + vector |
+| search_conversations | Find conversations                 | SQL                |
+| search_jobs          | Find jobs by criteria              | SQL                |
+| search_connections   | Find connections                   | SQL                |
+| search_activities    | Find activities                    | SQL                |
+| query_analytics      | Get computed metrics               | Analytics cache    |
+| query_graph          | Traverse relationships             | Graph queries      |
+| semantic_search      | Find by meaning                    | pgvector           |
+| get_person           | Get person details                 | SQL                |
+| get_company          | Get company details                | SQL                |
+| get_conversation     | Get conversation + messages        | SQL                |
+| get_insights         | Get generated insights             | SQL                |
+| run_web_research     | Research person/company (post-MVP) | External APIs      |
 
 ## Tool Design Principles
 

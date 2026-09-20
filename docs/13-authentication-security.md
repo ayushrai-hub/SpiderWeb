@@ -30,11 +30,11 @@ All `/api/v1/*` routes require valid JWT. Middleware extracts workspace_id and i
 
 ## Role Model
 
-| Role | Permissions |
-|------|------------|
-| owner | Full access. Delete workspace. Manage members. |
-| admin | Manage data, imports, settings. Cannot delete workspace. |
-| member | Read data, create imports, use AI chat. |
+| Role   | Permissions                                              |
+| ------ | -------------------------------------------------------- |
+| owner  | Full access. Delete workspace. Manage members.           |
+| admin  | Manage data, imports, settings. Cannot delete workspace. |
+| member | Read data, create imports, use AI chat.                  |
 
 ## Multi-tenancy
 

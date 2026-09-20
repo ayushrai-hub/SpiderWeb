@@ -14,7 +14,9 @@
     @apply bg-accent/15;
   }
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
     }
@@ -24,7 +26,7 @@
 @layer components {
   /* Page scaffold */
   .page {
-    @apply max-w-content mx-auto px-6 py-8 lg:px-10;
+    @apply max-w-content mx-auto min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10;
   }
   .page-header {
     @apply mb-8;
@@ -40,8 +42,11 @@
   }
 
   /* Surfaces */
+  /* min-w-0 so a card inside a grid or flex row can shrink below the
+     intrinsic width of its content — without it, a chart that measures its
+     own container blows the column out and the page scrolls sideways. */
   .card {
-    @apply bg-surface border border-line rounded-lg shadow-card;
+    @apply min-w-0 bg-surface border border-line rounded-lg shadow-card;
   }
   .card-pad {
     @apply p-5;
@@ -83,11 +88,21 @@
   .badge {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-caption font-medium;
   }
-  .badge-success { @apply bg-success-soft text-success; }
-  .badge-warning { @apply bg-warning-soft text-warning; }
-  .badge-danger { @apply bg-danger-soft text-danger; }
-  .badge-neutral { @apply bg-raised text-ink-2; }
-  .badge-accent { @apply bg-accent-soft text-accent; }
+  .badge-success {
+    @apply bg-success-soft text-success;
+  }
+  .badge-warning {
+    @apply bg-warning-soft text-warning;
+  }
+  .badge-danger {
+    @apply bg-danger-soft text-danger;
+  }
+  .badge-neutral {
+    @apply bg-raised text-ink-2;
+  }
+  .badge-accent {
+    @apply bg-accent-soft text-accent;
+  }
 
   /* Skeleton */
   .skeleton {

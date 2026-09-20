@@ -2,6 +2,7 @@
   "name": "@intel/ingestion",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
@@ -9,9 +10,9 @@
   },
   "dependencies": {
     "@intel/shared": "workspace:*",
-    "@intel/types": "workspace:*",
     "csv-parse": "^5.5.0",
-    "fflate": "^0.8.3"
+    "fflate": "^0.8.3",
+    "postgres": "^3.4.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

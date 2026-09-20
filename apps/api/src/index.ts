@@ -1,94 +1,96 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import multipart from '@fastify/multipart';
-import { loadEnv, createSupabaseClient } from '@intel/shared';
-import { healthRoutes } from './routes/health.js';
-import { authRoutes } from './routes/auth/signup.js';
-import { workspaceRoutes } from './routes/workspace/workspaces.js';
-import { importRoutes } from './routes/import/imports.js';
-import { peopleRoutes } from './routes/people/people.js';
-import { companiesRoutes } from './routes/company/companies.js';
-import { messagesRoutes } from './routes/message/messages.js';
-import { conversationsRoutes } from './routes/conversation/conversations.js';
-import { jobsRoutes } from './routes/job/jobs.js';
-import { analyticsRoutes } from './routes/analytics/analytics.js';
-import { exportRoutes } from './routes/analytics/exports.js';
-import { profileRoutes } from './routes/profile.js';
-import { searchRoutes } from './routes/search/search.js';
-import { aiChatRoutes } from './routes/ai/ai-chat.js';
-import { credentialRoutes } from './routes/ai/credentials.js';
-import { graphRoutes } from './routes/graph/graph.js';
-import alertRoutes from './routes/alerts/alerts.js';
-import queueRoutes from './routes/queue/queue.js';
-import { errorHandler } from './middleware/error-handler.js';
-import { apiRateLimit } from './middleware/rate-limit.js';
-import { setupGracefulShutdown } from './shutdown.js';
+import {
+  EnvError,
+  checkDatabaseHealth,
+  closeDb,
+  closeRedis,
+  createRedis,
+  loadEnv,
+  query,
+} from '@intel/shared';
+import { buildApp } from './app.js';
+import { closeIngestionQueue } from './services/ingestion.js';
 
-const env = loadEnv();
-
-// Initialize Supabase client
-if (env.SUPABASE_URL && env.SUPABASE_ANON_KEY) {
-  createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
-}
-
-const app = Fastify({
-  logger: {
-    level: env.LOG_LEVEL,
-    transport: env.NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined,
-  },
-  bodyLimit: 50 * 1024 * 1024, // 50MB for file uploads
-});
-
-app.register(cors, {
-  origin: env.CORS_ORIGIN,
-  credentials: true,
-});
-
-// Multipart file uploads
-app.register(multipart, {
-  limits: {
-    fileSize: 500 * 1024 * 1024, // 500MB max
-    files: 1,
-  },
-});
-
-// Rate limiting
-app.addHook('preHandler', apiRateLimit);
-
-// Error handler (must be registered before routes)
-app.register(errorHandler);
-
-// Register routes
-app.register(healthRoutes);
-app.register(authRoutes);
-app.register(workspaceRoutes);
-app.register(importRoutes);
-app.register(peopleRoutes);
-app.register(companiesRoutes);
-app.register(messagesRoutes);
-app.register(conversationsRoutes);
-app.register(jobsRoutes);
-app.register(analyticsRoutes);
-app.register(exportRoutes);
-app.register(profileRoutes);
-app.register(searchRoutes);
-app.register(aiChatRoutes);
-app.register(credentialRoutes);
-app.register(graphRoutes);
-app.register(alertRoutes, { prefix: "/api/v1/alerts" });
-app.register(queueRoutes, { prefix: "/api/v1/queue" });
-
-// Graceful shutdown
-setupGracefulShutdown(app);
-
-const start = async () => {
+async function main(): Promise<void> {
+  let env;
   try {
-    await app.listen({ port: env.PORT, host: env.HOST });
-    app.log.info(`API server running on ${env.HOST}:${env.PORT}`);
+    env = loadEnv();
   } catch (err) {
-    app.log.error(err);
+    if (err instanceof EnvError) {
+      console.error(`\n${err.message}\n\nCopy .env.example to .env and fill in the required values.\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
+
+  // Fail fast and clearly rather than throwing on the first request.
+  if (!(await checkDatabaseHealth())) {
+    console.error(
+      `Cannot connect to the database at ${redactUrl(env.DATABASE_URL)}.\n` +
+        'Start Postgres (docker compose up -d) and try again.'
+    );
     process.exit(1);
   }
-};
+  const migrated = await query<{ ok: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_name = 'people' AND column_name = 'dedupe_key'
+     ) AS ok`
+  );
+  if (!migrated[0]?.ok) {
+    console.error('The database schema is out of date. Run `pnpm db:migrate` and restart.');
+    process.exit(1);
+  }
 
-start();
+  if (env.REDIS_URL) createRedis(env.REDIS_URL);
+
+  const app = await buildApp({ env });
+  app.log.info(
+    env.REDIS_URL
+      ? 'Redis configured: rate limits are shared across instances'
+      : 'No REDIS_URL: rate limits are per-process and imports run in-process'
+  );
+
+  setupShutdown(app);
+  await app.listen({ port: env.PORT, host: env.HOST });
+  app.log.info(
+    `SpiderWeb API listening on http://${env.HOST}:${env.PORT} (ingestion: ${env.INGESTION_MODE})`
+  );
+}
+
+function setupShutdown(app: Awaited<ReturnType<typeof buildApp>>): void {
+  let closing = false;
+  const shutdown = async (signal: string) => {
+    if (closing) return;
+    closing = true;
+    app.log.info(`${signal} received, shutting down`);
+    try {
+      await app.close();
+      await closeIngestionQueue();
+      await closeRedis();
+      await closeDb();
+      process.exit(0);
+    } catch (err) {
+      app.log.error({ err }, 'Shutdown failed');
+      process.exit(1);
+    }
+  };
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+}
+
+/** Keep credentials out of startup logs. */
+function redactUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.password = '';
+    parsed.username = parsed.username ? '***' : '';
+    return parsed.toString();
+  } catch {
+    return '(unparseable DATABASE_URL)';
+  }
+}
+
+main().catch((err) => {
+  console.error('Failed to start the API:', err);
+  process.exit(1);
+});

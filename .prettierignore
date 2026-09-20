@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+coverage/
+pnpm-lock.yaml
+*.tsbuildinfo
+tests/e2e/.artifacts/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
