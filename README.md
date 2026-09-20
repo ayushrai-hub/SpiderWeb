@@ -286,18 +286,17 @@ pnpm test:e2e     # 38 browser tests (desktop + mobile)
 This is a pnpm monorepo. Create **two** Vercel projects from the same GitHub
 repo:
 
-| Project      | Framework | Root Directory | Notes                                     |
-| ------------ | --------- | -------------- | ----------------------------------------- |
-| `spider-web` | Next.js   | `apps/web`     | UI. Set `NEXT_PUBLIC_API_URL` to the API. |
-| API project  | Other     | `apps/api`     | Already configured as `spider-web-api`.   |
+| Project          | Framework | Root Directory | Notes                                        |
+| ---------------- | --------- | -------------- | -------------------------------------------- |
+| `spider-web`     | Next.js   | `apps/web`     | UI. Set `NEXT_PUBLIC_API_URL` → API URL.     |
+| `spider-web-api` | Fastify   | `apps/api`     | API. Requires `DATABASE_URL`, `CORS_ORIGIN`. |
 
-Critical: Root Directory must be `apps/web` for the UI. If it is empty, Vercel
-runs the root `pnpm -r build`, then looks for a static `public/` folder and
-fails with “No Output Directory named public”.
+Critical: UI Root Directory must be `apps/web` with Framework **Next.js** and
+the **default** Next.js output (never `public`). An empty root + Framework
+“Other” runs `pnpm -r build` then fails with “No Output Directory named public”.
 
-`apps/web/vercel.json` sets the monorepo install/build commands. After changing
-project settings, push to `main` or run `vercel deploy --prod` from a linked
-checkout.
+`apps/web/vercel.json` pins monorepo `pnpm install` / `@intel/web` build when
+the Root Directory is `apps/web`. Do not add a root `vercel.json` for the UI.
 
 ### Self-host / Docker
 
