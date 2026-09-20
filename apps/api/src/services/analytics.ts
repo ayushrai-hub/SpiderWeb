@@ -33,13 +33,18 @@ export async function loadNetworkFacts(workspaceId: string): Promise<NetworkFact
       [workspaceId]
     ),
     query<Row>(
-      `SELECT person_id, company_id, company_name, company_key, title, is_current,
-              start_date, end_date, started_on, ended_on, observed_at
-       FROM person_employment WHERE workspace_id = $1`,
+      `SELECT e.person_id, e.company_id, e.company_name, e.company_key, e.title, e.is_current,
+              e.start_date, e.end_date, e.started_on, e.ended_on, e.observed_at
+       FROM person_employment e
+       JOIN people p ON p.id = e.person_id AND NOT p.is_self
+       WHERE e.workspace_id = $1`,
       [workspaceId]
     ),
     query<Row>(
-      `SELECT person_id, school_name FROM education WHERE workspace_id = $1 AND school_name IS NOT NULL`,
+      `SELECT e.person_id, e.school_name
+       FROM education e
+       JOIN people p ON p.id = e.person_id AND NOT p.is_self
+       WHERE e.workspace_id = $1 AND e.school_name IS NOT NULL`,
       [workspaceId]
     ),
     query<Row>(

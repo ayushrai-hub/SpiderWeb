@@ -53,10 +53,12 @@ export function calculateCareerMobility(people: PersonFact[], employment: Employ
   }
 
   const names = new Map(people.map((p) => [p.id, p.name]));
+  const knownPeople = new Set(people.map((p) => p.id));
   const moves: CareerMove[] = [];
   let peopleWithMultipleEmployers = 0;
 
   for (const [personId, rows] of byPerson) {
+    if (!knownPeople.has(personId)) continue;
     const ordered = [...rows].sort(employmentOrder);
     const uniqueKeys = new Set(ordered.map((r) => r.companyKey || keyOf(r.companyName)));
     if (uniqueKeys.size > 1) peopleWithMultipleEmployers += 1;

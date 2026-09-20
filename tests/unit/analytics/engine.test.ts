@@ -225,6 +225,72 @@ describe('buildAnalyticsReport', () => {
   });
 });
 
+describe('career mobility', () => {
+  it('does not treat the importer’s own résumé as a network career move', () => {
+    const people = [
+      person({ id: 'c1', name: 'Jane Smith', currentCompany: 'Acme', currentCompanyKey: 'acme' }),
+    ];
+    const employment: EmploymentFact[] = [
+      {
+        personId: 'self',
+        companyName: 'Acme',
+        companyKey: 'acme',
+        isCurrent: false,
+        startedOn: '2018-01-01',
+      },
+      {
+        personId: 'self',
+        companyName: 'DataFlow',
+        companyKey: 'dataflow',
+        isCurrent: false,
+        startedOn: '2021-01-01',
+      },
+      {
+        personId: 'self',
+        companyName: 'Globex',
+        companyKey: 'globex',
+        isCurrent: true,
+        startedOn: '2024-01-01',
+      },
+      {
+        personId: 'c1',
+        companyName: 'Acme',
+        companyKey: 'acme',
+        isCurrent: true,
+      },
+    ];
+    const analysis = calculateCareerMobility(people, employment);
+    expect(analysis.peopleWithMultipleEmployers).toBe(0);
+    expect(analysis.moves).toHaveLength(0);
+  });
+
+  it('reconstructs connection moves only from consecutive distinct company keys', () => {
+    const people = [person({ id: 'c1', name: 'Jane Smith' })];
+    const employment: EmploymentFact[] = [
+      {
+        personId: 'c1',
+        companyName: 'Acme Corp',
+        companyKey: 'acme',
+        isCurrent: false,
+        startedOn: '2019-01-01',
+      },
+      {
+        personId: 'c1',
+        companyName: 'OpenAI',
+        companyKey: 'openai',
+        isCurrent: true,
+        startedOn: '2024-06-01',
+      },
+    ];
+    const analysis = calculateCareerMobility(people, employment);
+    expect(analysis.peopleWithMultipleEmployers).toBe(1);
+    expect(analysis.moves).toHaveLength(1);
+    expect(analysis.moves[0].name).toBe('Jane Smith');
+    expect(analysis.moves[0].fromCompany).toBe('Acme Corp');
+    expect(analysis.moves[0].toCompany).toBe('OpenAI');
+  });
+});
+
 describe('natural-language mapping', () => {
   it('maps company and change questions without inventing an intent', () => {
     expect(parseQuestion('Who in my network works at OpenAI?')).toMatchObject({
