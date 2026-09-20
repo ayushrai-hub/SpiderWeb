@@ -1,4 +1,4 @@
-# SpiderWeb
+# SpiderWeb Can show on localhost
 
 Turn the data export LinkedIn gives you into a structured, searchable map of
 your professional network.
