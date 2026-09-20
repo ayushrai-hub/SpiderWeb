@@ -158,10 +158,15 @@ function compactReport(report: AnalyticsReport): AnalyticsReport {
 }
 
 export async function getAnalyticsReport(workspaceId: string): Promise<AnalyticsReport> {
-  const facts = await loadNetworkFacts(workspaceId);
-  const report = compactReport(buildAnalyticsReport(facts));
-  void persistSnapshot(workspaceId, report);
-  return report;
+  try {
+    const facts = await loadNetworkFacts(workspaceId);
+    const report = compactReport(buildAnalyticsReport(facts));
+    void persistSnapshot(workspaceId, report);
+    return report;
+  } catch (err) {
+    console.error('analytics report failed', err);
+    throw err;
+  }
 }
 
 async function persistSnapshot(workspaceId: string, report: AnalyticsReport): Promise<void> {
