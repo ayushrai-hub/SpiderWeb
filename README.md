@@ -281,7 +281,25 @@ pnpm test:e2e     # 38 browser tests (desktop + mobile)
 - `workers/ingestion-worker/dist/index.js` — same, for queue mode
 - `apps/web/.next` — the standard Next.js production build
 
-Run order:
+### Vercel (recommended for the web UI)
+
+This is a pnpm monorepo. Create **two** Vercel projects from the same GitHub
+repo:
+
+| Project      | Framework | Root Directory | Notes                                     |
+| ------------ | --------- | -------------- | ----------------------------------------- |
+| `spider-web` | Next.js   | `apps/web`     | UI. Set `NEXT_PUBLIC_API_URL` to the API. |
+| API project  | Other     | `apps/api`     | Already configured as `spider-web-api`.   |
+
+Critical: Root Directory must be `apps/web` for the UI. If it is empty, Vercel
+runs the root `pnpm -r build`, then looks for a static `public/` folder and
+fails with “No Output Directory named public”.
+
+`apps/web/vercel.json` sets the monorepo install/build commands. After changing
+project settings, push to `main` or run `vercel deploy --prod` from a linked
+checkout.
+
+### Self-host / Docker
 
 ```bash
 pnpm install --prod --frozen-lockfile
